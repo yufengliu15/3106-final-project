@@ -1,0 +1,7 @@
+rlcard==1.2.0
+treys
+numpy
+pytest
+scikit-learn
+pandas
+matplotlib
