@@ -12,7 +12,7 @@ SUBPACKAGES = [
     "pokerbots.bots.crisp",
     "pokerbots.bots.fuzzy",
     "pokerbots.bots.ml",
-    "pokerbots.bots.scripted",
+    "pokerbots.bots.simple",
     "pokerbots.analysis",
     "pokerbots.web",
 ]
