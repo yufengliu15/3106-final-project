@@ -22,6 +22,12 @@ pytest
 `pyproject.toml` puts `src/` on pytest's import path, so tests can
 `import pokerbots` without installing the package.
 
+### Demo TUI
+```bash
+PYTHONPATH=src .venv/bin/python -m pokerbots.sim.demo --seed 0
+```
+
+Demonstrates the simulator on a round by round basis with seat-switching. 
 ## Layout
 
 ```

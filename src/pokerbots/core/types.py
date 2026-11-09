@@ -2,8 +2,11 @@
 
 Units of play:
     Game     -- thousands of rotations; player IDs stay fixed.
-    Rotation -- 8 rounds from the same seed; each player plays every position once.
+    Rotation -- x rounds (x = live players) from the same seed and the same
+                starting stacks; each player plays every position once.
     Round    -- one hand, from dealing the hole cards until the pot is awarded.
+
+See docs/tournament-and-simulator.md for how stacks carry between rotations.
 
 Cards use RLCard's native format (e.g. "H4", "SK", "CT"). Chip amounts are in big blinds (bb).
 
@@ -52,11 +55,11 @@ class Observation:
     """This bot's ID: random 1000-9999, fixed for the whole game."""
 
     positions: tuple[int, ...]
-    """The 8 player IDs by seat: index 0 = small blind ... index 7 = button."""
+    """IDs of the live players by seat: index 0 = small blind, 1 = big blind,
+    last index = button. Length varies; eliminated players are not listed."""
 
-    stacks: tuple[float | None, ...]
-    """Chips remaining in bb; stacks[i] belongs to positions[i].
-    0 means all-in, None means busted."""
+    stacks: tuple[float, ...]
+    """Chips remaining in bb; stacks[i] belongs to positions[i]. 0 means all-in."""
 
     action_history: tuple[tuple[int, str, float], ...]
     """Actions so far in this round only, as (player_id, action, amount in bb)."""
@@ -98,15 +101,21 @@ class RoundLog:
     """Round index within the rotation, 0-7."""
 
     positions: tuple[int, ...]
-    """The 8 player IDs by seat for this round: index 0 = small blind ... 7 = button."""
+    """IDs of the live players by seat for this round: index 0 = small blind,
+    1 = big blind, last index = button."""
 
-    starting_stacks: tuple[float | None, ...]
+    starting_stacks: tuple[float, ...]
     """Stacks in bb at the start of the round; starting_stacks[i] belongs to
-    positions[i]. None means busted."""
+    positions[i]."""
 
     actions: tuple[tuple[int, Street, str, float], ...]
     """Every action in the round, in order, as (player_id, street, action,
     amount in bb). street is needed to compute stats such as VPIP."""
+
+    community_cards: tuple[str, ...]
+    """Board cards dealt by the end of the round; length 0, 3, 4 or 5. After an
+    all-in the remaining board is run out, so this is 5 whenever there was a
+    showdown."""
 
     showdown_cards: dict[int, tuple[str, str]]
     """Hole cards of players who showed at showdown, keyed by player ID.
