@@ -1,5 +1,5 @@
 # Evaluation of 3 poker bot strategies
-COMP3106 Final Project
+## COMP3106 Final Project
 Yufeng Liu 101258905, Thomas Nolasque 101266644, Teja Chilukuri 101261938
 
 Adaptive poker bots: crisp rules vs fuzzy logic vs learning, compared at an
