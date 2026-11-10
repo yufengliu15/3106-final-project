@@ -37,6 +37,7 @@ def make_round_log() -> RoundLog:
         game_id=1,
         rotation_id=0,
         round_id=3,
+        seed=42,
         positions=POSITIONS,
         starting_stacks=(100.0,) * 8,
         actions=(

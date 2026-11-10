@@ -27,7 +27,17 @@ pytest
 PYTHONPATH=src .venv/bin/python -m pokerbots.sim.demo --seed 0
 ```
 
-Demonstrates the simulator on a round by round basis with seat-switching. 
+Demonstrates the simulator on a round by round basis with seat-switching.
+
+### Tournament
+```bash
+PYTHONPATH=src .venv/bin/python -m pokerbots.tournament                 # 5 games, logs to roundlogs/<date>_<time>.jsonl
+PYTHONPATH=src .venv/bin/python -m pokerbots.tournament --mode dev --games 2 --rotations 20
+```
+
+Which bots sit at the table is set in `DEFAULT_CONFIG` in
+`src/pokerbots/tournament/__main__.py` (see `TournamentConfig` for every option).
+
 ## Layout
 
 ```

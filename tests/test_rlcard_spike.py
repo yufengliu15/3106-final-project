@@ -1,7 +1,7 @@
 """Issue #15 spike: can RLCard support our table-state design?
 
 Uses RLCard directly (no pokerbots code). Checks the hooks the simulator will
-rely on -- see docs/tournament-and-simulator.md:
+rely on -- see docs/simulator.md:
 
 - blinds/stacks/dealer set per round via game attributes before reset()
 - rebuilding with fewer players after a bust

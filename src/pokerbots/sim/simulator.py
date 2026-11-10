@@ -4,7 +4,7 @@ The tournament builds a new Simulator for every round and passes in everything
 that carries between rounds (positions, stacks, seed, IDs). The simulator asks
 each bot to act, translates actions to and from RLCard, and returns a RoundLog.
 
-Design: docs/tournament-and-simulator.md
+Design: docs/simulator.md
 
 Units: bots and logs use big blinds (bb); RLCard uses whole chips with
 1 bb = CHIPS_PER_BB chips. Conversion happens only in this module.
@@ -111,6 +111,7 @@ class Simulator:
         self.game_id = game_id
         self.rotation_id = rotation_id
         self.round_id = round_id
+        self.seed = seed
         # (player_id, street, action, chips) for every action, in order
         self._actions: list[tuple[int, Street, str, int]] = []
 
@@ -205,6 +206,7 @@ class Simulator:
             game_id=self.game_id,
             rotation_id=self.rotation_id,
             round_id=self.round_id,
+            seed=self.seed,
             positions=self.positions,
             starting_stacks=tuple(chips_to_bb(c) for c in self.starting_chips),
             actions=tuple(

@@ -1,7 +1,7 @@
-# Tournament and simulator design
+# Simulator design
 
-Design for issue #15 (simulator wrapper over RLCard) and the tournament rules it
-must support. Status: rotation/stack model agreed 2026-11-08; per-action details
+Design for issue #15: the simulator wrapper over RLCard (`pokerbots.sim`). The
+tournament rules it supports are in `docs/tournament.md`.
 
 ## Responsibilities
 
@@ -29,42 +29,6 @@ simulator  --(RoundLog)--> tournament --> bot.observe_result()
 - `stacks[i]` belongs to `positions[i]`; same length as `positions`. No `None`
   entries (busted players are simply not listed).
 
-## Rotations
-
-Let **x** = number of live players at the start of a rotation.
-
-1. **Before round 1:** each player is given their starting stack **S** for this
-   rotation (the default stack, 100 bb, in the first rotation; otherwise the
-   result of the previous rotation's averaging).
-2. **Rounds 1..x:** every round starts from the **same starting stacks** and the
-   **same seed** (same deck order). Only the positions shift by one each round,
-   so each player plays every position exactly once on the same deal.
-   Each player's ending stack for the round is recorded.
-3. **After round x:** for each player, average their x ending stacks, with one
-   substitution: **an ending stack of 0 counts as −k·S**, with **k = 1** (so a
-   bust counts as minus the player's starting stack for that rotation).
-   This average is the player's starting stack for the next rotation.
-4. **Elimination:** a player whose average is **≤ 0** is busted, is reported as
-   such for that rotation, and never re-enters. The next rotation has fewer players.
-
-Busting is only checked between rotations, so the table size (and the RLCard
-env's player count) changes only between rotations, never mid-rotation.
-
-### Why k = 1
-
-Assuming a player roughly breaks even in the rounds they survive, they are
-eliminated when `b ≥ x / (1 + k)` of their x rounds end in a bust. With x = 8:
-
-| k | busts out of 8 needed |
-|---|---|
-| 0.5 | 6 |
-| **1** | **4** |
-| 2 | 3 |
-
-k = 1 eliminates a bot that busts in about half the seats. Rounds in a rotation
-share a deal, so busts are correlated; revisit k after measuring the bust rate
-in the 10,000-round random-bot run.
-
 ## Chip units
 
 RLCard works in whole chips: blinds are `small_blind = 1`, `big_blind = 2`
@@ -73,14 +37,12 @@ RLCard works in whole chips: blinds are `small_blind = 1`, `big_blind = 2`
 - Set `small_blind = 50`, `big_blind = 100`, so **1 bb = 100 chips**
   (0.01 bb resolution). Convert chips ↔ bb at the simulator boundary; bots and
   logs use bb.
-- Rotation averages are **truncated** to whole chips.
 
 ## Chip conservation
 
-- **Within every round:** total chips at the end equal total chips at the start.
-  Checked by the simulator / tests.
-- **Between rotations:** not conserved. The bust penalty and truncation both
-  shrink the table total; this is by design.
+Within every round, total chips at the end equal total chips at the start.
+Checked by the simulator / tests. (Between rotations the tournament does not
+conserve chips; see `docs/tournament.md`.)
 
 ## RLCard hooks used
 
