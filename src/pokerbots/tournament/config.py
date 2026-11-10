@@ -36,7 +36,7 @@ class TournamentConfig:
     simple_bots: tuple[type[Bot], ...] = (RandomBot,)
     """Pool that randomly fills the seats left after the main bots."""
 
-    seats: int = 8
+    seats: int = 10
     """Players at the table at the start of every game."""
 
     games: int = 5
