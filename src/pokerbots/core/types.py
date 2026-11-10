@@ -1,12 +1,13 @@
 """Shared formats every component uses to talk to each other.
 
 Units of play:
-    Game     -- thousands of rotations; player IDs stay fixed.
+    Game     -- up to N rotations (or until one player is left); player IDs
+                stay fixed within a game and are redrawn for the next one.
     Rotation -- x rounds (x = live players) from the same seed and the same
                 starting stacks; each player plays every position once.
     Round    -- one hand, from dealing the hole cards until the pot is awarded.
 
-See docs/tournament-and-simulator.md for how stacks carry between rotations.
+See docs/tournament.md for how stacks carry between rotations.
 
 Cards use RLCard's native format (e.g. "H4", "SK", "CT"). Chip amounts are in big blinds (bb).
 
@@ -78,7 +79,7 @@ class Observation:
     """ID of the current rotation within the game."""
 
     round_id: int
-    """Round index within the rotation, 0-7."""
+    """Round index within the rotation, 0 to x-1 (x = live players)."""
 
 
 @dataclass(frozen=True)
@@ -98,7 +99,11 @@ class RoundLog:
     """ID of the rotation within the game."""
 
     round_id: int
-    """Round index within the rotation, 0-7."""
+    """Round index within the rotation, 0 to x-1 (x = live players)."""
+
+    seed: int
+    """Seed that dealt this round's cards (shared by every round of the
+    rotation). Re-running the simulator with it reproduces the deal."""
 
     positions: tuple[int, ...]
     """IDs of the live players by seat for this round: index 0 = small blind,
