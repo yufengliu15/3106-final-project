@@ -3,7 +3,7 @@
 Yufeng Liu 101258905, Thomas Nolasque 101266644, Teja Chilukuri 101261938
 
 Adaptive poker bots: crisp rules vs fuzzy logic vs learning, compared at an
-8-seat no-limit hold'em table (see `docs/COMP3106-Project-Proposal.pdf`).
+10-seat no-limit hold'em table (see `docs/COMP3106-Project-Proposal.pdf`).
 
 ## Install
 
