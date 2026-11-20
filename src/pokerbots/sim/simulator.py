@@ -230,12 +230,22 @@ class Simulator:
         return Snapshot(saved)
 
     @classmethod
-    def from_snapshot(cls, snapshot: Snapshot, bots: Mapping[int, Bot], seed: int) -> "Simulator":
+    def from_snapshot(
+        cls,
+        snapshot: Snapshot,
+        bots: Mapping[int, Bot],
+        seed: int,
+        hands: Mapping[int, tuple[str, str]] | None = None,
+    ) -> "Simulator":
         """Continue a round from a snapshot with new bots.
 
         Every card the player to act at the snapshot cannot see -- all other
         players' hole cards and the undealt deck (future board) -- is shuffled
         and re-dealt with `seed`, so a rollout never sees the true future.
+
+        hands: optional {player_id: (card, card)} fixing some opponents' hole
+        cards (e.g. a re-deal consistent with their actions, #18). They must
+        be cards the player to act cannot see; the rest is shuffled as above.
         """
         sim = copy.copy(snapshot._sim)
         sim.bots = bots
@@ -244,8 +254,18 @@ class Simulator:
         missing = [pid for pid in sim.positions if pid not in bots]
         if missing:
             raise ValueError(f"no bot for player IDs {missing}")
-        sim._redeal_unseen(seed)
+        sim._redeal_unseen(seed, hands or {})
         return sim
+
+    def unseen_cards(self) -> tuple[str, ...]:
+        """Cards the player to act cannot see (others' hands + undealt deck)."""
+        game = self._game
+        viewer = game.game_pointer
+        out = [c.get_index() for c in game.dealer.deck]
+        for i, p in enumerate(game.players):
+            if i != viewer:
+                out.extend(c.get_index() for c in p.hand)
+        return tuple(out)
 
     # --- Internals -------------------------------------------------------------
 
@@ -296,7 +316,7 @@ class Simulator:
             game.step(Action.CHECK_CALL)
             assert player.in_chips == before, "all-in player was charged chips"
 
-    def _redeal_unseen(self, seed: int) -> None:
+    def _redeal_unseen(self, seed: int, fixed: Mapping[int, tuple[str, str]] = {}) -> None:
         game = self._game
         viewer = game.game_pointer
         rng = np.random.RandomState(seed)
@@ -305,11 +325,20 @@ class Simulator:
         pool = list(game.dealer.deck)
         for i in others:
             pool.extend(game.players[i].hand)
+        by_index = {c.get_index(): c for c in pool}
+        fixed_seats: dict[int, list] = {}
+        for pid, cards in fixed.items():
+            seat = self.positions.index(pid)
+            if seat == viewer:
+                raise ValueError("cannot fix the hole cards of the player to act")
+            fixed_seats[seat] = [by_index.pop(c) for c in cards]  # KeyError if visible/duplicate
+        # sort first so the re-deal depends only on `seed`, not on the true deal order
+        pool = sorted((c for c in pool if c.get_index() in by_index), key=lambda c: c.get_index())
         order = rng.permutation(len(pool))
         pool = [pool[j] for j in order]
 
         for i in others:
-            game.players[i].hand = [pool.pop(), pool.pop()]
+            game.players[i].hand = fixed_seats.get(i) or [pool.pop(), pool.pop()]
         game.dealer.deck = pool
 
         # Fresh randomness everywhere RLCard keeps a generator (e.g. split-pot remainders).
