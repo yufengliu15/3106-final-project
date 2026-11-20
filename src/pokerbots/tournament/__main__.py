@@ -14,7 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from pokerbots.bots.simple import RandomBot
+from pokerbots.bots.ml.bot_c import MLBot
+from pokerbots.bots.simple import SCRIPTED_POOL
 from pokerbots.tournament import Tournament, TournamentConfig, overall_leaderboard
 
 # Repo root (src/pokerbots/tournament/__main__.py -> up 3), so logs land in
@@ -22,8 +23,8 @@ from pokerbots.tournament import Tournament, TournamentConfig, overall_leaderboa
 ROUNDLOGS_DIR = Path(__file__).resolve().parents[3] / "roundlogs"
 
 DEFAULT_CONFIG = TournamentConfig(
-    main_bots=(),  # add CrispBot, FuzzyBot, MLBot here as they are ready
-    simple_bots=(RandomBot,),
+    main_bots=(MLBot,),  # add CrispBot, FuzzyBot here as they are ready
+    simple_bots=SCRIPTED_POOL,
 )
 
 
