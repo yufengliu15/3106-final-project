@@ -2,3 +2,8 @@
 __pycache__/
 .venv/
 .pytest_cache/
+
+# Bot C local data
+/data/
+
+.testmondata*

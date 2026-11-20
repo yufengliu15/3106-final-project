@@ -1,0 +1,49 @@
+{
+  "lint": 32,
+  "dead_code": 1,
+  "duplication": 0,
+  "test_count": 51,
+  "assert_count": 124,
+  "failing_tests": [
+    "tests.test_tournament::test_bad_configs_rejected[kw1]",
+    "tests.test_tournament::test_main_bots_always_seated_rest_from_pool",
+    "tests.test_tournament::test_overall_leaderboard_groups_by_bot_class"
+  ],
+  "buckets": {
+    "lint": {
+      "src\\pokerbots\\bots\\ml\\features.py B905": 2,
+      "src\\pokerbots\\bots\\ml\\labeller.py TID251": 2,
+      "src\\pokerbots\\bots\\ml\\labeller.py C901": 1,
+      "src\\pokerbots\\bots\\ml\\labeller.py PLR0913": 1,
+      "src\\pokerbots\\bots\\ml\\labeller.py PLR0912": 1,
+      "src\\pokerbots\\bots\\ml\\labeller.py PLR0917": 1,
+      "src\\pokerbots\\bots\\ml\\labeller.py PLR0915": 1,
+      "src\\pokerbots\\bots\\ml\\labeller.py B905": 1,
+      "src\\pokerbots\\bots\\ml\\labeller.py BLE001": 1,
+      "src\\pokerbots\\bots\\ml\\train.py PLR0915": 1,
+      "src\\pokerbots\\core\\equity.py C901": 1,
+      "src\\pokerbots\\core\\equity.py PLR0913": 1,
+      "src\\pokerbots\\core\\equity.py PLR0912": 1,
+      "src\\pokerbots\\core\\equity.py PLR0917": 1,
+      "src\\pokerbots\\core\\equity.py PERF401": 1,
+      "src\\pokerbots\\core\\equity.py B905": 1,
+      "src\\pokerbots\\core\\equity.py T201": 1,
+      "src\\pokerbots\\core\\situation.py C901": 1,
+      "src\\pokerbots\\core\\situation.py PLR0915": 1,
+      "src\\pokerbots\\core\\situation.py B905": 1,
+      "src\\pokerbots\\sim\\simulator.py PLR0913": 1,
+      "src\\pokerbots\\sim\\simulator.py PLR0917": 1,
+      "src\\pokerbots\\sim\\simulator.py S101": 2,
+      "src\\pokerbots\\tournament\\tournament.py F401": 1,
+      "src\\pokerbots\\tournament\\tournament.py B905": 1,
+      "src\\pokerbots\\tournament\\tournament.py PLR0913": 1,
+      "src\\pokerbots\\tournament\\tournament.py PLR0917": 1,
+      "tests\\test_simulator.py B905": 1,
+      "tests\\test_tournament.py B905": 1
+    },
+    "dead_code": {
+      "src\\pokerbots\\core\\equity.py unused": 1
+    },
+    "duplication": {}
+  }
+}

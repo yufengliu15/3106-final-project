@@ -1,0 +1,4 @@
+{
+  "lint_file": ".venv\\Scripts\\python.exe -m ruff check --quiet {file}",
+  "check": ".venv\\Scripts\\python.exe tools/quality_check.py"
+}
