@@ -5,3 +5,6 @@ pytest
 scikit-learn
 pandas
 matplotlib
+phevaluator
+lightgbm
+pyarrow
