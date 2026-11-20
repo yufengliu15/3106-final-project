@@ -1,17 +1,16 @@
-"""Duplicate head-to-head evaluation of Bot C against any bots.
+"""Is bot X better than Bot C, or did it just get better cards?
 
-For every (opponent v, deck seed) two games are played with the same seed:
-(C, v) and (v, C) as the main bots. The tournament draws scripted fillers,
-player IDs and card seeds from base_seed alone, so swapping the order swaps
-C's and v's seats and cards: luck largely cancels in
+Uses the tournament harness, but plays every game twice with the same seed:
+once with Bot C listed first and once with the other bot listed first. That
+swaps their seats and hole cards while everything else stays the same, so
+lucky cards mostly cancel out. Many seeds are played in parallel.
 
-    d = [(C - v) in game 1 + (C - v) in game 2] / 2     (final stacks, bb)
+For each opponent it prints Bot C's average chip lead in big blinds (positive
+means Bot C won), a 95% confidence interval, and whether the lead is
+statistically significant (one-sided t-test, Holm-corrected when several
+opponents or settings are tested).
 
-Per opponent: mean d, 95% bootstrap CI, one-sided t-test p (H1: d > 0). Holm
-correction across all (opponent, opponent-model condition) tests. R(C) =
-min over opponents of the CI lower bound (the robust selection criterion).
-
-    python -m pokerbots.bots.ml.eval2 --models models/bot_c --vs pokerbots.bots.simple:RandomBot --om both
+    python -m pokerbots.bots.ml.eval2 --models models/bot_c --vs your.module:YourBot --om both
 """
 
 from __future__ import annotations

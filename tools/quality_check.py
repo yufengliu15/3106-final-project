@@ -1,4 +1,5 @@
-"""Quality ratchet: fail if any metric is worse than the committed baseline.
+"""Quality ratchet: fail if any metric is worse than the local baseline
+(.quality/baseline.json, created on the first run).
 
     python tools/quality_check.py            # affected tests only (pytest-testmon)
     python tools/quality_check.py --full     # whole test suite
