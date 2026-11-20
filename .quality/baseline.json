@@ -1,5 +1,5 @@
 {
-  "lint": 61,
+  "lint": 54,
   "dead_code": 1,
   "duplication": 0,
   "test_count": 53,
@@ -11,7 +11,7 @@
   ],
   "buckets": {
     "lint": {
-      "src\\pokerbots\\bots\\ml\\eval2.py T201": 4,
+      "src\\pokerbots\\bots\\ml\\eval2.py PLR0915": 1,
       "src\\pokerbots\\bots\\ml\\features.py B905": 2,
       "src\\pokerbots\\bots\\ml\\labeller.py TID251": 2,
       "src\\pokerbots\\bots\\ml\\labeller.py C901": 1,
@@ -21,10 +21,8 @@
       "src\\pokerbots\\bots\\ml\\labeller.py PLR0915": 1,
       "src\\pokerbots\\bots\\ml\\labeller.py B905": 1,
       "src\\pokerbots\\bots\\ml\\labeller.py BLE001": 1,
-      "src\\pokerbots\\bots\\ml\\labeller.py T201": 1,
       "src\\pokerbots\\bots\\ml\\train.py B905": 1,
       "src\\pokerbots\\bots\\ml\\train2.py PLR0915": 1,
-      "src\\pokerbots\\bots\\ml\\train2.py T201": 3,
       "src\\pokerbots\\bots\\variants\\crisp_family.py C901": 2,
       "src\\pokerbots\\bots\\variants\\crisp_family.py PLR0912": 2,
       "src\\pokerbots\\bots\\variants\\crisp_family.py PLR0911": 5,
