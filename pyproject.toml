@@ -1,3 +1,36 @@
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+# Lint rules target the known failure modes of AI-written code:
+# hidden errors (BLE, S110, TRY), security (S), dead/debug code (F401, ERA, T20),
+# over-complex functions (C90, PLR09xx), and general bugs (B, F, E).
+# Existing findings are tracked by tools/quality_check.py as a ratchet, so
+# this list can be tightened over time without a big-bang cleanup.
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "S", "BLE", "TRY", "C90", "PLR09", "SIM", "PERF", "T20", "ERA", "RET", "PIE", "TID251"]
+ignore = [
+    "E501",    # line length: formatter's job
+    "S311",    # non-crypto random is correct for poker simulation
+    "TRY003",  # long exception messages are fine
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR09", "TID251"]                       # asserts are the point of tests
+"src/pokerbots/{sim,tournament,analysis,web}/**" = ["TID251"]  # only bots/ is restricted
+"tools/**" = ["TID251", "S603", "S607", "S314", "T20"]         # dev scripts: subprocesses, print, parse our own junit xml
+"src/pokerbots/**/__main__.py" = ["T20"]             # CLI entry points print
+"src/pokerbots/sim/demo.py" = ["T20"]
+"src/pokerbots/bots/ml/{train,train2,eval2,labeller}.py" = ["T20"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Architecture rule (README): bots talk to core/ and opponents/ only.
+"rlcard".msg = "Bots must not import rlcard; use pokerbots.core instead."
+"pokerbots.sim".msg = "Bots must not import the simulator; use pokerbots.core instead."
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
