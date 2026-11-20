@@ -65,11 +65,13 @@ class LooseAggressiveBot(ScriptedBot):
 
 
 class CallingMachineBot(ScriptedBot):
-    range_pct, aggressive, name = 0.50, False, "CallingMachine"
+    range_pct, aggressive, name = 0.75, False, "CallingMachine"
 
 
 class SwitcherBot(Bot):
-    """Switches between the five non-random styles every `period` rounds."""
+    """Switches to a different non-random style at every multiple of `period`
+    rotations (obs.rotation_id). `switches` logs (rotation_id, style name) for
+    the starting style and every switch, so #19 can measure recovery time."""
 
     STYLES = (TightAggressiveBot, TightPassiveBot, LooseAggressiveBot,
               CallingMachineBot, AlwaysAllInBot)
@@ -77,22 +79,27 @@ class SwitcherBot(Bot):
     def __init__(self, period: int = 50) -> None:
         self.period = period
         self.rng = random.Random(0)
-        self.rounds = 0
+        self.block = 0
         self.style: Bot = self.STYLES[0]()
+        self.switches: list[tuple[int, str]] = []
 
     def new_game(self, game_id: int, player_id: int) -> None:
         self.rng = random.Random(game_id * 10_000 + player_id)
-        self.rounds = 0
+        self.block = 0
         self.style = self.rng.choice(self.STYLES)()
+        self.switches = [(0, type(self.style).__name__)]
 
     def act(self, obs: Observation) -> str:
+        block = obs.rotation_id // self.period
+        if block != self.block:
+            self.block = block
+            options = [s for s in self.STYLES if not isinstance(self.style, s)]
+            self.style = self.rng.choice(options)()
+            self.switches.append((obs.rotation_id, type(self.style).__name__))
         return self.style.act(obs)
 
     def explain(self) -> str:
         return f"Switcher as {self.style.explain()}"
 
     def observe_result(self, log: RoundLog) -> None:
-        self.rounds += 1
-        if self.rounds % self.period == 0:
-            options = [s for s in self.STYLES if not isinstance(self.style, s)]
-            self.style = self.rng.choice(options)()
+        pass
