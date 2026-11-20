@@ -1,0 +1,116 @@
+{
+  "best_iteration": 292,
+  "validation": {
+    "n": 13898,
+    "accuracy": 0.6110231688012664,
+    "mean_regret_bb": 2.416899568882813,
+    "street0": {
+      "n": 4747,
+      "accuracy": 0.5093743416894881,
+      "mean_regret_bb": 2.9942457736465133
+    },
+    "street1": {
+      "n": 4538,
+      "accuracy": 0.6438959894226531,
+      "mean_regret_bb": 2.1182162204348463
+    },
+    "street2": {
+      "n": 2740,
+      "accuracy": 0.6649635036496351,
+      "mean_regret_bb": 2.216509694343066
+    },
+    "street3": {
+      "n": 1873,
+      "accuracy": 0.7100907634810465,
+      "mean_regret_bb": 1.9704664975974373
+    }
+  },
+  "test": {
+    "n": 13805,
+    "accuracy": 0.6106483158275987,
+    "mean_regret_bb": 2.359548095496801,
+    "street0": {
+      "n": 4776,
+      "accuracy": 0.5232412060301508,
+      "mean_regret_bb": 2.599114212555835
+    },
+    "street1": {
+      "n": 4421,
+      "accuracy": 0.6399004750056548,
+      "mean_regret_bb": 2.1905100655960186
+    },
+    "street2": {
+      "n": 2699,
+      "accuracy": 0.6520933679140423,
+      "mean_regret_bb": 2.6370971887736196
+    },
+    "street3": {
+      "n": 1909,
+      "accuracy": 0.7029858564693556,
+      "mean_regret_bb": 1.7592570281124498
+    }
+  },
+  "test_passive_baseline_regret_bb": 4.6987841663648435,
+  "top_features_gain": [
+    [
+      "to_call",
+      901414.5
+    ],
+    [
+      "legal_fold",
+      854750.3
+    ],
+    [
+      "eq_range",
+      616892.2
+    ],
+    [
+      "edge",
+      578232.9
+    ],
+    [
+      "legal_call",
+      368743.5
+    ],
+    [
+      "cost_all_in",
+      236781.3
+    ],
+    [
+      "spr",
+      207852.4
+    ],
+    [
+      "pot_odds",
+      186186.7
+    ],
+    [
+      "eq_rand",
+      185892.4
+    ],
+    [
+      "legal_check",
+      182908.4
+    ],
+    [
+      "my_stack",
+      179452.6
+    ],
+    [
+      "field_mean_aggression",
+      129789.6
+    ],
+    [
+      "pct",
+      128873.8
+    ],
+    [
+      "eff_stack",
+      126984.9
+    ],
+    [
+      "stack_rank",
+      101876.5
+    ]
+  ]
+}
