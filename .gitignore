@@ -3,7 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 
-# Bot C local data
+# Local training and evaluation data
 /data/
 
 .testmondata*

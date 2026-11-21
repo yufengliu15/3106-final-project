@@ -1,8 +1,8 @@
-"""Terminal demo: you play all 4 seats to check the simulator by hand.
+"""Terminal demo: play no-limit hold'em by hand or against the bots.
 
 Run:
     python -m pokerbots.sim.demo            # seed 0
-    python -m pokerbots.sim.demo --seed 42
+    python -m pokerbots.sim.demo --vs-bots --seed 42
 
 On every turn the full Observation for the player to act is printed, then you
 pick one of its legal actions (by number or by name). After each round the
@@ -65,10 +65,20 @@ class HumanBot(Bot):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seed", type=int, default=0, help="seed of the first round")
+    parser.add_argument("--vs-bots", action="store_true", help="play one seat against Bot B, Bot C, and CallingMachine")
     args = parser.parse_args(argv)
 
     human = HumanBot()
-    bots = {pid: human for pid in PLAYER_IDS}
+    bots: dict[int, Bot] = dict.fromkeys(PLAYER_IDS, human)
+    if args.vs_bots:
+        from pokerbots.bots.fuzzy import FuzzyBot
+        from pokerbots.bots.ml.bot_c import MLBot
+        from pokerbots.bots.simple import CallingMachineBot
+
+        bots = dict(zip(PLAYER_IDS, (human, FuzzyBot(), MLBot(), CallingMachineBot()), strict=True))
+    opponents = {pid: bot for pid, bot in bots.items() if bot is not human}
+    for pid, bot in opponents.items():
+        bot.new_game(0, pid)
     positions = list(PLAYER_IDS)
     print("Pick an action by number or name. Type anything else to test an illegal action; 'q' quits.")
 
@@ -91,6 +101,11 @@ def main(argv: list[str] | None = None) -> int:
             print("(In a real run this ends the game.)")
             return 1
         show("RoundLog", log)
+        actors = {pid for pid, _, _, _ in log.actions}
+        for pid, bot in opponents.items():
+            if pid in actors:
+                print(f"{type(bot).__name__} ({pid}), last decision: {bot.explain()}")
+            bot.observe_result(log)
 
         if input("\nAnother round? [Y/n] ").strip().lower() in ("n", "no", "q"):
             return 0
