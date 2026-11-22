@@ -8,15 +8,17 @@ Adaptive poker bots: crisp rules vs fuzzy logic vs learning, compared at an
 ## Install
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv venv
+uv pip install -r requirements.txt
 ```
+
+Run the commands below from the project root. They use the Python executable
+in `.venv`, so activation is optional on macOS and Linux.
 
 ## Run tests
 
-```bash
-pytest
+```sh
+.venv/bin/python -m pytest
 ```
 
 `pyproject.toml` puts `src/` on pytest's import path, so tests can
@@ -24,19 +26,41 @@ pytest
 
 ### Demo TUI
 ```bash
-PYTHONPATH=src .venv/bin/python -m pokerbots.sim.demo --seed 0
+PYTHONPATH=src .venv/bin/python -m pokerbots.sim.demo --vs-bots --seed 0
 ```
 
-Demonstrates the simulator on a round by round basis with seat-switching.
+Play one seat against Bot B, Bot C, and Calling Machine. Pick an action by
+number. The demo shows the bots' last decisions after each hand. Omit
+`--vs-bots` to control all four seats.
 
 ### Tournament
 ```bash
-PYTHONPATH=src .venv/bin/python -m pokerbots.tournament                 # 5 games, logs to roundlogs/<date>_<time>.jsonl
-PYTHONPATH=src .venv/bin/python -m pokerbots.tournament --mode dev --games 2 --rotations 20
+PYTHONPATH=src .venv/bin/python -m pokerbots.tournament --games 1 --rotations 20 --no-logs
 ```
 
-Which bots sit at the table is set in `DEFAULT_CONFIG` in
-`src/pokerbots/tournament/__main__.py` (see `TournamentConfig` for every option).
+The default tournament seats Bot B and Bot C with eight scripted opponents.
+The leaderboard shows final stacks in big blinds. Run without the flags for
+five full games and JSONL round logs.
+
+To compare Bot B and Bot C with seats swapped for each seed, run
+
+```bash
+OMP_NUM_THREADS=1 PYTHONPATH=src .venv/bin/python -m pokerbots.bots.ml.eval2 \
+  --models models/bot_c --vs pokerbots.bots.fuzzy:FuzzyBot \
+  --om both --seeds 12 --rotations 50 --workers 4
+```
+
+Positive results are Bot C's average final-stack lead. Negative results
+are Bot B's. The opponent-model flag applies to both bots.
+
+Bot B keeps separate Mamdani rules for opening, responding to a preflop
+raise, betting after the flop, and calling for its stack. Its range model
+uses the current bettor's observed style and always leaves some probability
+for off-range hands. Its stack-call rules price only contestable chips and
+charge the tournament's default bust penalty in proportion to the chance of
+losing outright.
+[Mamdani and Assilian, 1975](https://www.sciencedirect.com/science/article/pii/S0020737375800022)
+[Billings et al., 1999](https://cdn.aaai.org/Symposia/Spring/1999/SS-99-07/SS99-07-003.pdf)
 
 ## Layout
 

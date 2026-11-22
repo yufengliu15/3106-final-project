@@ -130,7 +130,7 @@ def test_main_bots_always_seated_rest_from_pool(tmp_path):
     config = small_config(tmp_path, main_bots=(RecordingBot,), simple_bots=(OtherBot,), rotations=1)
     for game in Tournament(config).run():
         names = sorted(p.bot for p in game.standings)
-        assert names == ["OtherBot"] * 7 + ["RecordingBot"]
+        assert names == ["OtherBot"] * (config.seats - 1) + ["RecordingBot"]
 
 
 def test_player_ids_fresh_each_game(tmp_path):
@@ -187,14 +187,14 @@ def test_overall_leaderboard_groups_by_bot_class(tmp_path):
     results = Tournament(small_config(tmp_path, main_bots=(OtherBot,), rotations=5)).run()
     rows = {r.bot: r for r in overall_leaderboard(results)}
     assert rows["OtherBot"].appearances == 3
-    assert rows["RandomBot"].appearances == 21
+    assert rows["RandomBot"].appearances == 3 * 9  # 3 games x the 9 non-main seats
 
 
 @pytest.mark.parametrize(
     "kw",
     [
         dict(seats=1),
-        dict(main_bots=(RandomBot,) * 9),
+        dict(main_bots=(RandomBot,) * 11),  # more main bots than the 10 seats
         dict(simple_bots=()),
         dict(games=1000),
         dict(rotations=0),
