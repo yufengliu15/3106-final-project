@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Poker bots: live table</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #12161c; --panel: #1b2129; --line: #2c3541; --fg: #e6e9ee; --muted: #8a94a3;
+    --felt: #1f5a3a; --felt-edge: #163f2a; --accent: #f0b429; --win: #3ecf8e; --lose: #ef5f5f;
+    --crisp: #5aa9ff; --fuzzy: #c58cff; --ml: #ff9f43;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; }
+  .stat { color: var(--muted); }
+  .stat b { color: var(--fg); font-weight: 600; }
+  .pill { padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .pill.live { background: #173d2b; color: var(--win); }
+  .pill.done { background: #2c3541; color: var(--fg); }
+  .pill.error { background: #4a1f1f; color: var(--lose); }
+  .pill.wait { background: #3d3317; color: var(--accent); }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  button, select { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  input[type=range] { flex: 1; min-width: 200px; }
+  .hint { color: var(--muted); font-size: 11px; }
+  main { display: grid; grid-template-columns: minmax(560px, 1fr) 430px; gap: 12px; padding: 12px 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  .table-wrap { position: relative; width: 100%; aspect-ratio: 16 / 10; }
+  .felt { position: absolute; inset: 14% 12%; border-radius: 50%; background: radial-gradient(ellipse at center, #26734a 0%, var(--felt) 60%, var(--felt-edge) 100%); border: 10px solid #3a2a1c; box-shadow: inset 0 0 40px #0008; }
+  .center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .pot { font-size: 15px; font-weight: 700; margin-top: 6px; }
+  .street { color: #cfe; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+  .seat { position: absolute; transform: translate(-50%, -50%); width: 150px; background: #0f1318ee; border: 2px solid var(--line); border-radius: 10px; padding: 5px 7px; }
+  .seat.actor { border-color: var(--accent); box-shadow: 0 0 12px #f0b42966; }
+  .seat.next { border-style: dashed; border-color: var(--muted); }
+  .seat.folded { opacity: .45; }
+  .seat.winner { border-color: var(--win); box-shadow: 0 0 12px #3ecf8e66; }
+  .seat .top { display: flex; justify-content: space-between; gap: 4px; font-size: 11px; }
+  .seat .name { font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seat .stack { font-weight: 700; }
+  .seat .bet { color: var(--accent); font-size: 11px; min-height: 15px; }
+  .seat .last { font-size: 11px; color: var(--muted); min-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos { background: #2c3541; border-radius: 4px; padding: 0 4px; font-size: 10px; font-weight: 700; }
+  .pos.BTN { background: #f0f0f0; color: #111; }
+  .cards { display: flex; gap: 3px; margin: 3px 0; }
+  .card { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 38px; background: #fafafa; color: #111; border-radius: 4px; font-weight: 700; font-size: 13px; box-shadow: 0 1px 2px #0006; }
+  .card.red { color: #d62c2c; }
+  .card.back { background: repeating-linear-gradient(45deg, #2f4d7a, #2f4d7a 4px, #3a5d90 4px, #3a5d90 8px); }
+  .card.slot { background: transparent; border: 1px dashed #ffffff33; box-shadow: none; }
+  .board .card { width: 36px; height: 50px; font-size: 16px; }
+  .bot-CrispBot { color: var(--crisp); } .bot-FuzzyBot { color: var(--fuzzy); } .bot-MLBot { color: var(--ml); }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.grid th, table.grid td { padding: 3px 5px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  table.grid th:first-child, table.grid td:first-child, table.grid td.l, table.grid th.l { text-align: left; }
+  table.grid th { color: var(--muted); font-weight: 600; }
+  .pos-val { color: var(--win); } .neg-val { color: var(--lose); }
+  .log { max-height: 260px; overflow-y: auto; font-size: 12px; }
+  .log div { padding: 2px 4px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; }
+  .log div:hover { background: #ffffff0d; }
+  .log div.cur { background: #f0b42922; }
+  .log .st { color: var(--muted); width: 48px; flex: none; }
+  .explain { white-space: pre-wrap; font: 12px/1.45 Menlo, Consolas, monospace; background: #0f1318; border-radius: 6px; padding: 8px; max-height: 260px; overflow-y: auto; }
+  .legal { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+  .legal span { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 11px; }
+  .legal span.chosen { border-color: var(--accent); color: var(--accent); }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); padding: 30px; text-align: center; }
+  #loc { margin: 0; white-space: pre-wrap; word-break: break-word; font: 11.5px/1.45 Menlo, Consolas, monospace; background: #0f1318; border-radius: 6px; padding: 8px; max-height: 240px; overflow-y: auto; user-select: all; }
+  button.copy { float: right; font-size: 11px; text-transform: none; padding: 1px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Poker bots: live table</h1>
+  <span id="status" class="pill wait">connecting</span>
+  <span class="stat">Game <b id="h-game">-</b></span>
+  <span class="stat">Rotation <b id="h-rot">-</b></span>
+  <span class="stat">Round <b id="h-round">-</b></span>
+  <span class="stat">Street <b id="h-street">-</b></span>
+  <span class="stat">Action <b id="h-action">-</b></span>
+  <span class="stat">Seed <b id="h-seed">-</b></span>
+  <span class="stat">Buffered <b id="h-buf">0</b> steps</span>
+</header>
+<div class="controls">
+  <button id="b-prev-rot" title="Previous rotation ([)">&#9198; Rotation</button>
+  <button id="b-prev-round" title="Previous round (Shift+Left)">&#9198; Round</button>
+  <button id="b-prev" title="Previous step (Left)">&#9664; Step</button>
+  <button id="b-play" title="Play / pause (Space)">&#9654; Play</button>
+  <button id="b-next" title="Next step (Right)">Step &#9654;</button>
+  <button id="b-next-round" title="Next round (Shift+Right)">Round &#9197;</button>
+  <button id="b-next-rot" title="Next rotation (])">Rotation &#9197;</button>
+  <button id="b-live" title="Follow the newest step (L)">&#9679; Live</button>
+  <label class="hint">Speed
+    <select id="speed">
+      <option value="0.5">0.5 / s</option><option value="1">1 / s</option><option value="2" selected>2 / s</option>
+      <option value="5">5 / s</option><option value="10">10 / s</option><option value="30">30 / s</option><option value="200">200 / s</option>
+    </select>
+  </label>
+  <button id="b-cards" class="on" title="Show every player's hole cards (H)">Hole cards: all</button>
+  <input id="scrub" type="range" min="0" max="0" value="0">
+  <span class="hint">Space play/pause · ←/→ step · Shift+←/→ round · [ / ] rotation · L live · H cards</span>
+</div>
+<main>
+  <section>
+    <div class="panel">
+      <div class="table-wrap" id="table"><div class="empty">Waiting for the first deal. Start the server with <code>PYTHONPATH=src .venv/bin/python -m pokerbots.web</code> and open <code>http://localhost:8765/</code>.</div></div>
+    </div>
+    <div class="panel"><h2>Rotation: ending stack per round (bb)</h2><div id="rotation-grid" class="muted">-</div></div>
+    <div class="panel"><h2>Rotation history: starting stacks (bb)</h2><div id="history" class="muted">-</div></div>
+  </section>
+  <aside>
+    <div class="panel">
+      <h2>You are here <button id="b-copy" class="copy" title="Copy this location and its state as text">Copy location</button></h2>
+      <pre id="loc">-</pre>
+    </div>
+    <div class="panel"><h2>Decision</h2><div id="decision" class="muted">-</div></div>
+    <div class="panel"><h2>Round actions</h2><div id="actions" class="log muted">-</div></div>
+    <div class="panel"><h2>Leaderboard: this game</h2><div id="leaderboard" class="muted">-</div></div>
+    <div class="panel"><h2>Leaderboard: overall (finished games)</h2><div id="overall" class="muted">No finished games yet.</div></div>
+  </aside>
+</main>
+<script>
+"use strict";
+const S = {
+  meta: null, games: {}, rounds: [], frames: [], head: -1,
+  playing: false, live: true, speed: 2, showCards: true, status: "connecting", error: "",
+};
+const STREETS = { 0: "preflop", 3: "flop", 4: "turn", 5: "river" };
+const FROM_BUTTON = ["BTN", "CO", "HJ", "LJ", "MP", "UTG+2", "UTG+1", "UTG"];
+const $ = (id) => document.getElementById(id);
+const fmt = (x) => (Math.round(x * 100) / 100).toFixed(Math.abs(x) >= 100 ? 0 : 1);
+const signed = (x) => (x > 0 ? "+" : "") + fmt(x);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------------------------------------------------------------- event intake
+function ingest(ev) {
+  const g = S.games[ev.game_id];
+  switch (ev.type) {
+    case "meta": S.meta = ev; break;
+    case "game":
+      S.games[ev.game_id] = { id: ev.game_id, players: ev.players, seatOrder: ev.seat_order,
+        rotations: [], result: null, endings: {} };
+      break;
+    case "round_start":
+      S.rounds.push({ ...ev, actions: [], log: null, f0: S.frames.length });
+      S.frames.push({ r: S.rounds.length - 1, s: -1 });
+      break;
+    case "action": {
+      const r = S.rounds[S.rounds.length - 1];
+      r.actions.push(ev);
+      S.frames.push({ r: S.rounds.length - 1, s: r.actions.length - 1 });
+      break;
+    }
+    case "round": {
+      const r = S.rounds[S.rounds.length - 1];
+      r.log = ev;
+      S.frames.push({ r: S.rounds.length - 1, s: "end" });
+      const key = ev.rotation_id;
+      g.endings[key] = g.endings[key] || {};
+      g.endings[key][ev.round_id] = Object.fromEntries(ev.positions.map((p, i) => [p, ev.starting_stacks[i] + ev.chip_deltas[p]]));
+      break;
+    }
+    case "rotation": g.rotations.push({ ...ev, at: S.frames.length }); break;
+    case "result": g.result = { ...ev, at: S.frames.length }; break;
+    case "done": S.status = "done"; break;
+    case "error": S.status = "error"; S.error = ev.message; break;
+  }
+}
+
+function connect() {
+  if (location.protocol === "file:") { S.status = "error"; S.error = "Open this page through the server: python -m pokerbots.web"; render(); return; }
+  const es = new EventSource("/events");
+  es.onopen = () => { if (S.status === "connecting") S.status = "live"; render(); };
+  es.onmessage = (m) => {
+    for (const ev of JSON.parse(m.data)) ingest(ev);
+    if (S.live) S.head = S.frames.length - 1;
+    scheduleRender();
+  };
+  es.addEventListener("end", () => { es.close(); if (S.status !== "error") S.status = "done"; scheduleRender(); });
+  es.onerror = () => { if (S.status === "live") { S.status = "connecting"; scheduleRender(); } };
+}
+
+let pending = false;
+function scheduleRender() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; render(); }); } }
+
+// ---------------------------------------------------------------- table state
+function positionName(i, n) {
+  if (n === 2) return i === 0 ? "SB" : "BB/BTN";
+  if (i === 0) return "SB";
+  if (i === 1) return "BB";
+  return FROM_BUTTON[Math.min(n - 1 - i, FROM_BUTTON.length - 1)];
+}
+
+/** Table state after step s of round r (-1 = just dealt, "end" = pot awarded). */
+function tableState(r, s) {
+  const n = r.positions.length;
+  const stack = {}, bet = {}, put = {}, last = {}, folded = new Set();
+  r.positions.forEach((p, i) => { stack[p] = r.stacks[i]; bet[p] = 0; put[p] = 0; });
+  const blind = (p, amt) => { const a = Math.min(amt, stack[p]); stack[p] -= a; bet[p] += a; put[p] += a; };
+  blind(r.positions[0], 0.5); blind(r.positions[1], 1.0);
+  let board = [], street = 0;
+  const upto = s === "end" ? r.actions.length - 1 : s;
+  for (let k = 0; k <= upto; k++) {
+    const a = r.actions[k];
+    if (a.board.length !== board.length) { for (const p of r.positions) bet[p] = 0; }
+    board = a.board; street = a.board.length;
+    const cost = a.cost || 0;
+    stack[a.player_id] -= cost; bet[a.player_id] += cost; put[a.player_id] += cost;
+    last[a.player_id] = a;
+    if (a.action === "fold") folded.add(a.player_id);
+  }
+  const next = s !== "end" && r.actions[upto + 1] ? r.actions[upto + 1] : null;
+  if (next && next.board.length !== board.length) { board = next.board; street = board.length; for (const p of r.positions) bet[p] = 0; }
+  let pot = Object.values(put).reduce((x, y) => x + y, 0);
+  const winners = new Set();
+  if (s === "end" && r.log) {
+    board = r.log.community_cards; street = board.length;
+    r.positions.forEach((p, i) => { stack[p] = r.log.starting_stacks[i] + r.log.chip_deltas[p]; bet[p] = 0; if (r.log.chip_deltas[p] > 0) winners.add(p); });
+    pot = 0;
+  }
+  return { n, stack, bet, last, folded, board, street, pot, winners,
+    actor: typeof s === "number" && s >= 0 ? r.actions[s].player_id : null, next: next ? next.player_id : null };
+}
+
+// ---------------------------------------------------------------- rendering
+function cardHtml(c, cls = "") {
+  if (!c) return `<span class="card slot ${cls}"></span>`;
+  const suit = { S: "\u2660", H: "\u2665", D: "\u2666", C: "\u2663" }[c[0]];
+  const rank = c[1] === "T" ? "10" : c[1];
+  const red = c[0] === "H" || c[0] === "D" ? "red" : "";
+  return `<span class="card ${red} ${cls}">${rank}${suit}</span>`;
+}
+function botTag(name) { return `<span class="bot-${esc(name)}">${esc(name)}</span>`; }
+function actionLabel(a) { return a.action.replace(/_/g, " ") + (a.cost ? ` ${fmt(a.cost)}` : ""); }
+
+function renderTable(r, st, g) {
+  const wrap = $("table");
+  const seats = r.positions.map((p, i) => {
+    const angle = Math.PI / 2 + (2 * Math.PI * (i + 0.5)) / st.n;
+    const x = 50 + 44 * Math.cos(angle), y = 50 + 40 * Math.sin(angle);
+    const pos = positionName(i, st.n);
+    const hole = r.hole_cards[p] || [];
+    const show = S.showCards || (st.winners.size && r.log && r.log.showdown_cards[p]);
+    const cards = show ? hole.map((c) => cardHtml(c)).join("") : cardHtml(null, "back") + cardHtml(null, "back");
+    const cls = ["seat"];
+    if (st.folded.has(p)) cls.push("folded");
+    if (st.actor === p) cls.push("actor");
+    if (st.next === p) cls.push("next");
+    if (st.winners.has(p)) cls.push("winner");
+    const last = st.last[p];
+    const delta = r.log && st.winners.size ? r.log.chip_deltas[p] : null;
+    const lastTxt = delta !== null ? `<span class="${delta >= 0 ? "pos-val" : "neg-val"}">${signed(delta)} bb</span>` : last ? esc(actionLabel(last)) : "";
+    return `<div class="${cls.join(" ")}" style="left:${x}%;top:${y}%">
+      <div class="top"><span class="name">${botTag(g.players[p])}</span><span class="pos ${pos}">${pos}</span></div>
+      <div class="top"><span class="muted">#${p}</span><span class="stack">${fmt(st.stack[p])} bb${st.stack[p] <= 1e-9 && !st.folded.has(p) ? " (all-in)" : ""}</span></div>
+      <div class="cards">${cards}</div>
+      <div class="bet">${st.bet[p] > 0 ? "bet " + fmt(st.bet[p]) : ""}</div>
+      <div class="last">${lastTxt}</div></div>`;
+  }).join("");
+  const board = [0, 1, 2, 3, 4].map((i) => cardHtml(st.board[i])).join("");
+  const streetName = STREETS[st.street] || "";
+  wrap.innerHTML = `<div class="felt"></div><div class="center"><div class="street">${streetName}${r.log && st.winners.size ? " · showdown / result" : ""}</div>
+    <div class="cards board">${board}</div><div class="pot">Pot ${fmt(st.pot)} bb</div></div>${seats}`;
+}
+
+function renderDecision(r, s, g) {
+  const el = $("decision");
+  if (s === -1) { el.innerHTML = `<span class="muted">Cards dealt. ${r.positions.length} players, seed ${r.seed}.</span>`; return; }
+  if (s === "end") {
+    const rows = r.positions.map((p) => [p, r.log.chip_deltas[p]]).sort((a, b) => b[1] - a[1]);
+    const sd = Object.keys(r.log.showdown_cards).length ? "Showdown" : "Won without showdown";
+    el.innerHTML = `<div class="muted">${sd}</div><table class="grid"><tr><th class="l">Player</th><th>Change</th></tr>` +
+      rows.map(([p, d]) => `<tr><td>${botTag(g.players[p])} <span class="muted">#${p}</span></td><td class="${d > 0 ? "pos-val" : d < 0 ? "neg-val" : ""}">${signed(d)}</td></tr>`).join("") + "</table>";
+    return;
+  }
+  const a = r.actions[s];
+  const legal = a.legal.map(([name, cost]) => `<span class="${name === a.action ? "chosen" : ""}">${esc(name.replace(/_/g, " "))} ${fmt(cost)}</span>`).join("");
+  const text = String(a.explain || "").split("; ").join("\n");
+  el.innerHTML = `<div>${botTag(g.players[a.player_id])} <span class="muted">#${a.player_id}</span> chose <b>${esc(actionLabel(a))}</b>
+    <span class="muted">· pot ${fmt(a.pot)} before</span></div><div class="legal">${legal}</div><div class="explain">${esc(text)}</div>`;
+}
+
+// ---------------------------------------------------------------- location (copy to report a spot)
+let locText = "";
+const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+const cardList = (cs) => (cs && cs.length ? cs.join(" ") : "-");
+function locationText(r, s, g) {
+  const n = r.positions.length;
+  const path = (S.meta && S.meta.log_file) || null;
+  const sel = `select(.type=="round" and .game_id==${r.game_id} and .rotation_id==${r.rotation_id} and .round_id==${r.round_id})`;
+  const lines = [
+    `game_id=${r.game_id} rotation_id=${r.rotation_id} round_id=${r.round_id} (round ${r.round_id + 1} of ${n}) seed=${r.seed}`,
+    `seats: ${r.positions.map((p, i) => `${positionName(i, n)} #${p} ${g.players[p]}`).join(", ")}`,
+    `hole cards: ${r.positions.map((p) => `#${p} ${cardList(r.hole_cards[p])}`).join(", ")}`,
+  ];
+  let filter;
+  if (s === -1) {
+    lines.push("step: deal (before any action)");
+    lines.push(`start stacks (bb): ${r.positions.map((p, i) => `#${p} ${fmt(r.stacks[i])}`).join(", ")}`);
+    filter = "{positions, starting_stacks, seed}";
+  } else if (s === "end") {
+    lines.push("step: result (pot awarded)");
+    if (r.log) lines.push(`board: ${cardList(r.log.community_cards)} · change (bb): ${r.positions.map((p) => `#${p} ${signed(r.log.chip_deltas[p])}`).join(", ")}`);
+    filter = "{community_cards, showdown_cards, chip_deltas}";
+  } else {
+    const a = r.actions[s];
+    const before = tableState(r, s - 1);
+    const pos = positionName(r.positions.indexOf(a.player_id), n);
+    lines.push(`step: action ${s} (0-based; the header shows ${s + 1}) · street ${STREETS[a.board.length] || "preflop"}`);
+    lines.push(`player: #${a.player_id} ${g.players[a.player_id]} at ${pos} chose ${a.action}${a.cost ? " " + fmt(a.cost) : ""}`);
+    lines.push(`before: pot ${fmt(before.pot)} bb · board ${cardList(before.board)} · stacks ${r.positions.map((p) => `#${p} ${fmt(before.stack[p])}`).join(", ")}`);
+    lines.push(`legal: ${a.legal.map(([nm, c]) => `${nm} ${fmt(c)}${nm === a.action ? " (chosen)" : ""}`).join(", ")}`);
+    lines.push(`explain: ${a.explain || "-"}`);
+    filter = `.actions[${s}]`;
+  }
+  if (!path) lines.push("log: none (viewer started with --no-logs)");
+  else {
+    lines.push(`log: ${path}`);
+    lines.push(`find: jq ${shq(`${sel} | ${filter}`)} ${shq(path)}`);
+    if (!r.log) lines.push("note: round still in progress; its log line is written when the round ends");
+  }
+  return lines.join("\n");
+}
+function renderLocation(r, s, g) {
+  locText = locationText(r, s, g);
+  $("loc").textContent = locText;
+}
+
+
+function renderActions(r, s, g) {
+  const el = $("actions");
+  const base = r.f0;
+  let html = `<div data-f="${base}" class="${s === -1 ? "cur" : ""}"><span class="st">deal</span><span class="muted">blinds 0.5 / 1</span></div>`;
+  r.actions.forEach((a, k) => {
+    const street = STREETS[a.board.length] || "";
+    html += `<div data-f="${base + 1 + k}" class="${s === k ? "cur" : ""}"><span class="st">${street}</span><span>${botTag(g.players[a.player_id])} ${esc(actionLabel(a))}</span></div>`;
+  });
+  if (r.log) html += `<div data-f="${base + 1 + r.actions.length}" class="${s === "end" ? "cur" : ""}"><span class="st">end</span><span class="muted">pot awarded</span></div>`;
+  el.innerHTML = html;
+  const cur = el.querySelector(".cur");
+  if (cur) cur.scrollIntoView({ block: "nearest" });
+}
+
+function rotationStarts(g, rotationId) {
+  // Starting stacks for this rotation: the previous rotation's averages, else the configured stack.
+  const prev = g.rotations.filter((x) => x.rotation_id < rotationId && x.at <= S.head + 1);
+  const start = S.meta ? S.meta.starting_stack : 100;
+  const out = {}; const elim = {};
+  for (const p of g.seatOrder) out[p] = start;
+  for (const rot of prev) {
+    for (const [p, v] of Object.entries(rot.stacks)) out[p] = v;
+    for (const p of rot.eliminated) { elim[p] = rot.rotation_id; out[p] = 0; }
+  }
+  return { out, elim };
+}
+
+function renderLeaderboard(r, st, g) {
+  const { out, elim } = rotationStarts(g, r.rotation_id);
+  const rows = g.seatOrder.map((p) => ({ p, start: out[p], now: p in st.stack ? st.stack[p] : null, elim: elim[p] }));
+  rows.sort((a, b) => (a.elim ? 1 : 0) - (b.elim ? 1 : 0) || b.start - a.start || (b.elim || 0) - (a.elim || 0));
+  $("leaderboard").innerHTML = `<table class="grid"><tr><th class="l">#</th><th class="l">Bot</th><th>Rotation start</th><th>This round</th><th>Status</th></tr>` +
+    rows.map((x, i) => `<tr><td class="l">${i + 1}</td><td class="l">${botTag(g.players[x.p])} <span class="muted">#${x.p}</span></td>
+      <td>${fmt(x.start)}</td><td>${x.now === null ? "-" : fmt(x.now)}</td><td>${x.elim ? `<span class="neg-val">out (rot ${x.elim})</span>` : "alive"}</td></tr>`).join("") + "</table>";
+}
+
+function renderOverall() {
+  const finished = Object.values(S.games).filter((g) => g.result && g.result.at <= S.head + 1);
+  if (!finished.length) { $("overall").innerHTML = "No finished games yet."; return; }
+  const by = {};
+  for (const g of finished) {
+    for (const p of g.result.standings) {
+      const row = by[p.bot] = by[p.bot] || { bot: p.bot, seats: 0, stack: 0, elim: 0 };
+      row.seats++; row.stack += p.final_stack;
+      row.elim += p.eliminated_in === null ? g.result.rotations_played + 1 : p.eliminated_in;
+    }
+  }
+  const rows = Object.values(by).map((x) => ({ ...x, mean: x.stack / x.seats, meanElim: x.elim / x.seats }))
+    .sort((a, b) => b.mean - a.mean || b.meanElim - a.meanElim);
+  $("overall").innerHTML = `<div class="muted">${finished.length} game(s)</div><table class="grid"><tr><th class="l">#</th><th class="l">Bot</th><th>Seats</th><th>Mean stack</th><th>Mean elim rot</th></tr>` +
+    rows.map((x, i) => `<tr><td class="l">${i + 1}</td><td class="l">${botTag(x.bot)}</td><td>${x.seats}</td><td>${fmt(x.mean)}</td><td>${x.meanElim.toFixed(1)}</td></tr>`).join("") + "</table>";
+}
+
+function renderRotationGrid(r, s, g) {
+  const sameRot = S.rounds.filter((x) => x.game_id === r.game_id && x.rotation_id === r.rotation_id);
+  const x = r.positions.length;
+  const doneThrough = s === "end" ? r.round_id : r.round_id - 1;
+  const ends = g.endings[r.rotation_id] || {};
+  const { out } = rotationStarts(g, r.rotation_id);
+  const players = sameRot[0].positions;
+  const rot = g.rotations.find((q) => q.rotation_id === r.rotation_id && q.at <= S.head + 1);
+  let html = `<table class="grid"><tr><th class="l">Bot</th><th>Start</th>`;
+  for (let k = 0; k < x; k++) html += `<th>${k === r.round_id ? "<u>R" + (k + 1) + "</u>" : "R" + (k + 1)}</th>`;
+  html += `<th>Average</th></tr>`;
+  for (const p of players) {
+    html += `<tr><td class="l">${botTag(g.players[p])} <span class="muted">#${p}</span></td><td>${fmt(out[p])}</td>`;
+    for (let k = 0; k < x; k++) {
+      const v = k <= doneThrough && ends[k] ? ends[k][p] : null;
+      const cls = v === null ? "" : v > out[p] ? "pos-val" : v < out[p] ? "neg-val" : "";
+      html += `<td class="${cls}">${v === null ? "" : fmt(v)}</td>`;
+    }
+    const avg = rot ? (rot.eliminated.includes(Number(p)) ? '<span class="neg-val">out</span>' : fmt(rot.stacks[p])) : "";
+    html += `<td>${avg}</td></tr>`;
+  }
+  $("rotation-grid").innerHTML = html + "</table><div class='hint'>Every round of a rotation uses the same deal and the same starting stacks; seats shift by one. A bust counts as -k x start in the average.</div>";
+}
+
+function renderHistory(g) {
+  const rots = g.rotations.filter((x) => x.at <= S.head + 1);
+  if (!rots.length) { $("history").innerHTML = "No finished rotations yet."; return; }
+  const shown = rots.slice(-12);
+  let html = `<table class="grid"><tr><th class="l">Bot</th><th>Start</th>${shown.map((x) => `<th>after ${x.rotation_id}</th>`).join("")}</tr>`;
+  const start = S.meta ? S.meta.starting_stack : 100;
+  for (const p of g.seatOrder) {
+    html += `<tr><td class="l">${botTag(g.players[p])} <span class="muted">#${p}</span></td><td>${fmt(start)}</td>`;
+    for (const x of shown) {
+      if (x.eliminated.includes(Number(p))) html += `<td class="neg-val">out</td>`;
+      else html += `<td>${p in x.stacks ? fmt(x.stacks[p]) : ""}</td>`;
+    }
+    html += "</tr>";
+  }
+  $("history").innerHTML = html + `</table>${rots.length > 12 ? `<div class="hint">Last 12 of ${rots.length} rotations.</div>` : ""}`;
+}
+
+function renderHeader(r, s, g) {
+  const pill = $("status");
+  pill.className = "pill " + { live: "live", done: "done", error: "error", connecting: "wait" }[S.status];
+  pill.textContent = S.status === "error" ? "error: " + S.error : S.status === "live" ? "running" : S.status;
+  const m = S.meta || {};
+  $("h-game").textContent = `${r.game_id} / ${m.games || "?"}`;
+  $("h-rot").textContent = `${r.rotation_id} / ${m.rotations || "?"}`;
+  $("h-round").textContent = `${r.round_id + 1} / ${r.positions.length}`;
+  const st = s === "end" ? "result" : s === -1 ? "deal" : STREETS[r.actions[s].board.length];
+  $("h-street").textContent = st;
+  $("h-action").textContent = s === -1 ? "0" : s === "end" ? "end" : `${s + 1} / ${r.log ? r.actions.length : r.actions.length + "+"}`;
+  $("h-seed").textContent = r.seed;
+  $("h-buf").textContent = `${S.head + 1} / ${S.frames.length}`;
+  $("b-play").innerHTML = S.playing ? "&#10074;&#10074; Pause" : "&#9654; Play";
+  $("b-play").classList.toggle("on", S.playing);
+  $("b-live").classList.toggle("on", S.live);
+  const scrub = $("scrub"); scrub.max = Math.max(S.frames.length - 1, 0); scrub.value = Math.max(S.head, 0);
+}
+
+function render() {
+  if (S.head < 0 || !S.frames.length) {
+    const pill = $("status");
+    pill.textContent = S.status === "error" ? "error: " + S.error : S.status;
+    return;
+  }
+  S.head = Math.min(S.head, S.frames.length - 1);
+  const f = S.frames[S.head];
+  const r = S.rounds[f.r];
+  const g = S.games[r.game_id];
+  const st = tableState(r, f.s);
+  renderHeader(r, f.s, g);
+  renderTable(r, st, g);
+  renderDecision(r, f.s, g);
+  renderLocation(r, f.s, g);
+  renderActions(r, f.s, g);
+  renderLeaderboard(r, st, g);
+  renderOverall();
+  renderRotationGrid(r, f.s, g);
+  renderHistory(g);
+}
+
+// ---------------------------------------------------------------- controls
+function seek(i) { S.head = Math.max(0, Math.min(i, S.frames.length - 1)); S.live = false; render(); }
+function roundJump(dir) {
+  if (S.head < 0) return;
+  const cur = S.frames[S.head].r;
+  let i;
+  if (dir < 0) {
+    const startOfThis = S.rounds[cur].f0;
+    i = S.head > startOfThis ? startOfThis : cur > 0 ? S.rounds[cur - 1].f0 : -1;
+  } else {
+    i = cur + 1 < S.rounds.length ? S.rounds[cur + 1].f0 : -1;
+  }
+  if (i >= 0) seek(i);
+}
+function rotationJump(dir) {
+  if (S.head < 0) return;
+  const cur = S.frames[S.head].r;
+  const same = (a, b) => S.rounds[a].game_id === S.rounds[b].game_id && S.rounds[a].rotation_id === S.rounds[b].rotation_id;
+  let first = cur;
+  while (first > 0 && same(first - 1, cur)) first--;
+  let target = -1;
+  if (dir < 0) {
+    if (S.head > S.rounds[first].f0) target = first;
+    else if (first > 0) { target = first - 1; while (target > 0 && same(target - 1, first - 1)) target--; }
+  } else {
+    let next = cur + 1;
+    while (next < S.rounds.length && same(next, cur)) next++;
+    if (next < S.rounds.length) target = next;
+  }
+  if (target >= 0) seek(S.rounds[target].f0);
+}
+let timer = null;
+function setPlaying(on) {
+  S.playing = on;
+  clearInterval(timer);
+  if (on) {
+    S.live = false;
+    timer = setInterval(() => {
+      if (S.head < S.frames.length - 1) { S.head++; render(); }
+      else if (S.status === "done" || S.status === "error") setPlaying(false);
+    }, 1000 / S.speed);
+  }
+  render();
+}
+$("b-play").onclick = () => setPlaying(!S.playing);
+$("b-prev").onclick = () => { setPlaying(false); seek(S.head - 1); };
+$("b-next").onclick = () => { setPlaying(false); seek(S.head + 1); };
+$("b-prev-round").onclick = () => { setPlaying(false); roundJump(-1); };
+$("b-next-round").onclick = () => { setPlaying(false); roundJump(1); };
+$("b-prev-rot").onclick = () => { setPlaying(false); rotationJump(-1); };
+$("b-next-rot").onclick = () => { setPlaying(false); rotationJump(1); };
+$("b-live").onclick = () => { setPlaying(false); S.live = true; S.head = S.frames.length - 1; render(); };
+$("b-cards").onclick = () => {
+  S.showCards = !S.showCards;
+  $("b-cards").textContent = S.showCards ? "Hole cards: all" : "Hole cards: showdown only";
+  $("b-cards").classList.toggle("on", S.showCards);
+  render();
+};
+$("speed").onchange = (e) => { S.speed = Number(e.target.value); if (S.playing) setPlaying(true); };
+$("scrub").oninput = (e) => { setPlaying(false); seek(Number(e.target.value)); };
+$("actions").onclick = (e) => { const d = e.target.closest("[data-f]"); if (d) { setPlaying(false); seek(Number(d.dataset.f)); } };
+$("b-copy").onclick = async () => {
+  let ok = true;
+  try { await navigator.clipboard.writeText(locText); }
+  catch {
+    const t = Object.assign(document.createElement("textarea"), { value: locText });
+    document.body.append(t); t.select(); ok = document.execCommand("copy"); t.remove();
+  }
+  $("b-copy").textContent = ok ? "Copied" : "Copy failed";
+  setTimeout(() => { $("b-copy").textContent = "Copy location"; }, 1200);
+};
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.key === " ") { e.preventDefault(); setPlaying(!S.playing); }
+  else if (e.key === "ArrowLeft") { setPlaying(false); e.shiftKey ? roundJump(-1) : seek(S.head - 1); }
+  else if (e.key === "ArrowRight") { setPlaying(false); e.shiftKey ? roundJump(1) : seek(S.head + 1); }
+  else if (e.key === "[") { setPlaying(false); rotationJump(-1); }
+  else if (e.key === "]") { setPlaying(false); rotationJump(1); }
+  else if (e.key === "l" || e.key === "L") $("b-live").click();
+  else if (e.key === "h" || e.key === "H") $("b-cards").click();
+});
+connect();
+</script>
+</body>
+</html>

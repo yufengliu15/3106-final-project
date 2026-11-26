@@ -12,6 +12,7 @@ from pokerbots.core import (
     RoundLog,
 )
 from pokerbots.sim import IllegalActionError, Simulator
+from pokerbots.sim.simulator import settle_pots
 
 
 class RandomBot(Bot):
@@ -111,6 +112,25 @@ def test_short_stack_sees_only_all_in_for_its_stack():
     assert dict(obs.legal_actions) == {FOLD: 0.0, ALL_IN: 0.6}
     sim.step(ALL_IN)
     assert sim._game.players[2].in_chips == 60
+
+
+@pytest.mark.parametrize("stacks", [[100.0, 0.01, 100.0, 100.0], [0.3, 0.6, 100.0, 100.0]])
+def test_player_all_in_from_blind_is_never_asked(stacks):
+    """A blind that takes the whole stack is an all-in: no decision, still in the hand."""
+    asked = []
+
+    class Recorder(FixedBot):
+        def act(self, obs: Observation) -> str:
+            asked.append(obs.player_id)
+            return super().act(obs)
+
+    ids = IDS[:4]
+    blind_all_in = [pid for pid, s in zip(ids, stacks, strict=True) if s < 1]
+    log = make_sim(stacks, bots={pid: Recorder(CALL) for pid in ids}).play()
+    assert not set(asked) & set(blind_all_in)
+    assert not [a for a in log.actions if a[0] in blind_all_in]
+    assert set(blind_all_in) <= set(log.showdown_cards)
+    assert abs(sum(log.chip_deltas.values())) < 1e-9
 
 
 def test_action_amounts_recorded():
@@ -229,3 +249,19 @@ def test_snapshot_does_not_disturb_original_and_rollouts_finish():
     a = Simulator.from_snapshot(snap, sim.bots, seed=99)
     b = Simulator.from_snapshot(snap, sim.bots, seed=99)
     assert a.observation() == b.observation()
+
+
+BOARD = ["C2", "D7", "H9", "SJ", "C4"]
+
+
+def test_side_pot_goes_to_best_remaining_hand_not_back_to_contributors():
+    # A (aces) all-in for 1000; B (kings) and C (queens) put in 5000; D folded after 300.
+    hands = [["SA", "HA", *BOARD], ["SK", "HK", *BOARD], ["SQ", "HQ", *BOARD], None]
+    payoffs = settle_pots([1000, 5000, 5000, 300], hands)
+    # Main pot 1000*3 + D's 300 -> A. Side pot 4000*2 -> B beats C.
+    assert payoffs == [2300, 3000, -5000, -300]
+
+
+def test_tied_pot_splits_and_odd_chip_goes_left_of_button():
+    hands = [["SA", "HA", *BOARD], ["DA", "CA", *BOARD], ["SQ", "HQ", *BOARD]]
+    assert settle_pots([101, 101, 101], hands) == [51, 50, -101]

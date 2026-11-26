@@ -15,6 +15,11 @@ Rotation rules (docs/tournament.md):
 All randomness (player IDs, simple-bot draws, seating, eval-mode card seeds)
 comes from one random.Random(base_seed), drawn in a fixed order, so the same
 config always gives the same results.
+
+Observer (live viewer, pokerbots.web): an optional callable receives every log
+record, plus "round_start" (everyone's hole cards) and "action" (the acting
+bot's observation, choice and explain()) records that are never written to
+the log file.
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ import random
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import IO
+from typing import IO, Callable
 
 from pokerbots.core import Bot, RoundLog
 from pokerbots.sim import CHIPS_PER_BB, Simulator
@@ -91,9 +96,10 @@ def overall_leaderboard(results: list[GameResult]) -> tuple[OverallRow, ...]:
 
 
 class Tournament:
-    def __init__(self, config: TournamentConfig) -> None:
+    def __init__(self, config: TournamentConfig, observer: Callable[[dict], None] | None = None) -> None:
         config.validate()
         self.config = config
+        self.observer = observer
         self.rng = random.Random(config.base_seed)
         self.results: list[GameResult] = []
         self._out: IO[str] | None = None
@@ -130,14 +136,13 @@ class Tournament:
         eliminated_in: dict[int, int] = {}
         rotations_played = 0
 
-        out = self._out
-        self._write(out, {"type": "game", "game_id": game_id, "players": names,
-                          "seat_order": seat_order, "mode": cfg.mode})
+        self._emit({"type": "game", "game_id": game_id, "players": names,
+                    "seat_order": seat_order, "mode": cfg.mode})
         for rotation_id in range(1, cfg.rotations + 1):
             if len(live) < 2:
                 break
             seed = self._card_seed(game_id, rotation_id)
-            endings = self._play_rotation(bots, live, stacks, seed, game_id, rotation_id, out)
+            endings = self._play_rotation(bots, live, stacks, seed, game_id, rotation_id)
             rotations_played = rotation_id
 
             still_live = []
@@ -149,9 +154,9 @@ class Tournament:
                 else:
                     stacks[pid] = avg
                     still_live.append(pid)
-            self._write(out, {"type": "rotation", "game_id": game_id, "rotation_id": rotation_id,
-                              "seed": seed, "stacks": {p: stacks[p] / CHIPS_PER_BB for p in live},
-                              "eliminated": [p for p in live if p not in still_live]})
+            self._emit({"type": "rotation", "game_id": game_id, "rotation_id": rotation_id,
+                        "seed": seed, "stacks": {p: stacks[p] / CHIPS_PER_BB for p in live},
+                        "eliminated": [p for p in live if p not in still_live]})
             live = still_live
 
         standings = rank(
@@ -159,12 +164,12 @@ class Tournament:
             rotations_played,
         )
         result = GameResult(game_id, rotations_played, standings)
-        self._write(out, {"type": "result", **asdict(result)})
+        self._emit({"type": "result", **asdict(result)})
         return result
 
     # --- Internals -------------------------------------------------------------
 
-    def _play_rotation(self, bots, live, stacks, seed, game_id, rotation_id, out) -> dict[int, list[int]]:
+    def _play_rotation(self, bots, live, stacks, seed, game_id, rotation_id) -> dict[int, list[int]]:
         x = len(live)
         endings: dict[int, list[int]] = {pid: [] for pid in live}
         for round_id in range(x):
@@ -172,13 +177,32 @@ class Tournament:
             for i, pid in enumerate(live):
                 positions[(i + round_id) % x] = pid
             start_bb = [stacks[pid] / CHIPS_PER_BB for pid in positions]
-            log = Simulator(bots, positions, start_bb, seed, game_id, rotation_id, round_id).play()
-            self._write(out, {"type": "round", **asdict(log)})
+            sim = Simulator(bots, positions, start_bb, seed, game_id, rotation_id, round_id)
+            log = self._play_round(sim, bots) if self.observer else sim.play()
+            self._emit({"type": "round", **asdict(log)})
             for bot in bots.values():
                 bot.observe_result(log)
             for pid in positions:
                 endings[pid].append(stacks[pid] + round(log.chip_deltas[pid] * CHIPS_PER_BB))
         return endings
+
+    def _play_round(self, sim: Simulator, bots: dict[int, Bot]) -> RoundLog:
+        """Simulator.play(), reporting the deal and every decision to the observer."""
+        observer = self.observer
+        observer({"type": "round_start", "game_id": sim.game_id, "rotation_id": sim.rotation_id,
+                  "round_id": sim.round_id, "seed": sim.seed, "positions": list(sim.positions),
+                  "stacks": [c / CHIPS_PER_BB for c in sim.starting_chips], "hole_cards": sim.hole_cards()})
+        while not sim.is_over():
+            obs = sim.observation()
+            bot = bots[obs.player_id]
+            action = bot.act(obs)
+            observer({"type": "action", "game_id": obs.game_id, "rotation_id": obs.rotation_id,
+                      "round_id": obs.round_id, "player_id": obs.player_id, "action": action,
+                      "cost": dict(obs.legal_actions).get(action), "pot": obs.pot, "stacks": list(obs.stacks),
+                      "board": list(obs.community_cards), "legal": [list(a) for a in obs.legal_actions],
+                      "explain": bot.explain()})
+            sim.step(action)
+        return sim.round_log()
 
     def _card_seed(self, game_id: int, rotation_id: int) -> int:
         if self.config.mode == "dev":
@@ -190,9 +214,10 @@ class Tournament:
             return None
         path = Path(self.config.log_file)
         path.parent.mkdir(parents=True, exist_ok=True)
-        return open(path, "w")
+        return open(path, "w", buffering=1)  # line-buffered: jq can read a live run
 
-    @staticmethod
-    def _write(out: IO[str] | None, record: dict) -> None:
-        if out is not None:
-            out.write(json.dumps(record) + "\n")
+    def _emit(self, record: dict) -> None:
+        if self._out is not None:
+            self._out.write(json.dumps(record) + "\n")
+        if self.observer is not None:
+            self.observer(record)
