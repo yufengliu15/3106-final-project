@@ -59,7 +59,7 @@
   table.grid th:first-child, table.grid td:first-child, table.grid td.l, table.grid th.l { text-align: left; }
   table.grid th { color: var(--muted); font-weight: 600; }
   .pos-val { color: var(--win); } .neg-val { color: var(--lose); }
-  .log { max-height: 260px; overflow-y: auto; font-size: 12px; }
+  .log { position: relative; max-height: 260px; overflow-y: auto; font-size: 12px; }
   .log div { padding: 2px 4px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; }
   .log div:hover { background: #ffffff0d; }
   .log div.cur { background: #f0b42922; }
@@ -72,28 +72,80 @@
   .empty { color: var(--muted); padding: 30px; text-align: center; }
   #loc { margin: 0; white-space: pre-wrap; word-break: break-word; font: 11.5px/1.45 Menlo, Consolas, monospace; background: #0f1318; border-radius: 6px; padding: 8px; max-height: 240px; overflow-y: auto; user-select: all; }
   button.copy { float: right; font-size: 11px; text-transform: none; padding: 1px 8px; }
+  .grow { flex: 1; }
+  .bot-human { color: #ff7eb6; }
+  .you { background: #ff7eb6; color: #111; border-radius: 4px; padding: 0 4px; font-size: 10px; font-weight: 700; margin-left: 4px; }
+  .seat.mine { box-shadow: 0 0 0 3px #ff7eb655; }
+  button.join { border-color: #ff7eb6; color: #ff7eb6; font-weight: 600; }
+  .humans { padding: 8px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+  .humans form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .human { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .human.turn { border: 2px solid var(--accent); box-shadow: 0 0 14px #f0b42955; }
+  .human .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .human .acts button { font-weight: 600; padding: 6px 12px; }
+  .human .acts button:disabled { opacity: .5; cursor: default; }
+  .human .leave { margin-left: auto; font-size: 11px; }
+  .human-msg { color: var(--lose); font-size: 12px; }
+  .center.end { z-index: 2; }
+  .result { margin-top: 6px; background: #0f1318f2; border: 2px solid var(--win); border-radius: 10px; padding: 8px 12px; min-width: 260px; max-width: 360px; box-shadow: 0 4px 20px #000a; }
+  .result h3 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--win); }
+  .result .line { font-size: 14px; margin: 2px 0; }
+  .result .others { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .card.hi { outline: 2px solid var(--win); outline-offset: 1px; }
+  .card.dim { opacity: .35; }
+  [hidden] { display: none !important; }
+  input[type=text] { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+  body.sandbox .rot-only { display: none !important; }
+  .modal { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; width: min(560px, 92vw); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 40px #000c; }
+  .dialog h2 { margin: 0; font-size: 18px; }
+  .dialog p { margin: 0; color: var(--muted); }
+  .choice { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .choice h3 { margin: 0; font-size: 14px; }
+  .choice button { font-weight: 600; padding: 6px 14px; }
 </style>
 </head>
 <body>
+<div id="start" class="modal" hidden>
+  <form id="start-form" class="dialog">
+    <h2>Poker bots</h2>
+    <p>Nothing has been dealt yet. How do you want to use this run?</p>
+    <div class="choice">
+      <h3>Join as a player</h3>
+      <p>Play hands against the bots. Fresh cards every hand, the button moves one seat, stacks carry over, and a player with no chips is out. Sandbox only: no match log, no leaderboard entry.</p>
+      <label>Your name <input id="start-name" type="text" maxlength="24" placeholder="Player" autocomplete="off"></label>
+      <label><input id="start-hide-names" type="checkbox"> Hide bot names (play without knowing which bot is which; N toggles later)</label>
+      <button type="submit" class="join">Join as a player</button>
+    </div>
+    <div class="choice">
+      <h3>Watch the simulation</h3>
+      <p>Run the bot tournament: each rotation replays the same cards on shifted seats. Writes the match log and adds to LEADERBOARD.md.</p>
+      <button type="button" id="start-watch">Watch the simulation</button>
+    </div>
+    <div id="start-msg" class="human-msg"></div>
+  </form>
+</div>
 <header>
   <h1>Poker bots: live table</h1>
   <span id="status" class="pill wait">connecting</span>
   <span class="stat">Game <b id="h-game">-</b></span>
-  <span class="stat">Rotation <b id="h-rot">-</b></span>
-  <span class="stat">Round <b id="h-round">-</b></span>
+  <span class="stat"><span id="l-rot">Rotation</span> <b id="h-rot">-</b></span>
+  <span class="stat rot-only">Round <b id="h-round">-</b></span>
   <span class="stat">Street <b id="h-street">-</b></span>
   <span class="stat">Action <b id="h-action">-</b></span>
   <span class="stat">Seed <b id="h-seed">-</b></span>
   <span class="stat">Buffered <b id="h-buf">0</b> steps</span>
+  <span class="grow"></span>
+  <button id="b-join" class="join" title="Add another human seat at the table" hidden>Add another human player</button>
 </header>
 <div class="controls">
-  <button id="b-prev-rot" title="Previous rotation ([)">&#9198; Rotation</button>
+  <button id="b-prev-rot" class="rot-only" title="Previous rotation ([)">&#9198; Rotation</button>
   <button id="b-prev-round" title="Previous round (Shift+Left)">&#9198; Round</button>
   <button id="b-prev" title="Previous step (Left)">&#9664; Step</button>
   <button id="b-play" title="Play / pause (Space)">&#9654; Play</button>
   <button id="b-next" title="Next step (Right)">Step &#9654;</button>
   <button id="b-next-round" title="Next round (Shift+Right)">Round &#9197;</button>
-  <button id="b-next-rot" title="Next rotation (])">Rotation &#9197;</button>
+  <button id="b-next-rot" class="rot-only" title="Next rotation (])">Rotation &#9197;</button>
   <button id="b-live" title="Follow the newest step (L)">&#9679; Live</button>
   <label class="hint">Speed
     <select id="speed">
@@ -101,17 +153,28 @@
       <option value="5">5 / s</option><option value="10">10 / s</option><option value="30">30 / s</option><option value="200">200 / s</option>
     </select>
   </label>
-  <button id="b-cards" class="on" title="Show every player's hole cards (H)">Hole cards: all</button>
+  <button id="b-cards" class="on" title="Show every player's hole cards, or only yours (H). Showdown hands are always shown.">Hole cards: everyone</button>
+  <button id="b-names" class="on" title="Show or hide which bot sits in each seat (N). Hiding also hides the bots' explanations.">Bot names: shown</button>
   <input id="scrub" type="range" min="0" max="0" value="0">
-  <span class="hint">Space play/pause · ←/→ step · Shift+←/→ round · [ / ] rotation · L live · H cards</span>
+  <span class="hint">Space play/pause · ←/→ step · Shift+←/→ round · [ / ] rotation · L live · H cards · N names · 1-6 your action</span>
+</div>
+<div id="humans" class="humans" hidden>
+  <form id="join-form" hidden>
+    <label>Your name <input id="join-name" type="text" maxlength="24" placeholder="Player" autocomplete="off"></label>
+    <button type="submit">Join the table</button>
+    <button type="button" id="join-cancel">Cancel</button>
+    <span class="hint">You are dealt in at the next hand with the starting stack. Each join adds one human seat; join again for another player.</span>
+  </form>
+  <div id="human-msg" class="human-msg"></div>
+  <div id="human-list"></div>
 </div>
 <main>
   <section>
     <div class="panel">
       <div class="table-wrap" id="table"><div class="empty">Waiting for the first deal. Start the server with <code>PYTHONPATH=src .venv/bin/python -m pokerbots.web</code> and open <code>http://localhost:8765/</code>.</div></div>
     </div>
-    <div class="panel"><h2>Rotation: ending stack per round (bb)</h2><div id="rotation-grid" class="muted">-</div></div>
-    <div class="panel"><h2>Rotation history: starting stacks (bb)</h2><div id="history" class="muted">-</div></div>
+    <div class="panel rot-only"><h2>Rotation: ending stack per round (bb)</h2><div id="rotation-grid" class="muted">-</div></div>
+    <div class="panel"><h2 id="history-title">Rotation history: starting stacks (bb)</h2><div id="history" class="muted">-</div></div>
   </section>
   <aside>
     <div class="panel">
@@ -128,8 +191,16 @@
 "use strict";
 const S = {
   meta: null, games: {}, rounds: [], frames: [], head: -1,
-  playing: false, live: true, speed: 2, showCards: true, status: "connecting", error: "",
+  playing: false, live: true, speed: 2, showAll: true, showNames: true, status: "connecting", error: "",
+  humans: [],   // humans this tab plays: { id, token, name, runId }
+  seatOf: {},   // "game_id:player_id" -> human_id, from "seat" records
+  prompts: {},  // human_id -> open decision ("prompt" record)
 };
+const RESULT_HOLD_MS = 3000;
+const HUMANS_KEY = "pokerbots.humans";
+try { S.humans = JSON.parse(sessionStorage.getItem(HUMANS_KEY) || "[]"); } catch { S.humans = []; }
+S.showAll = !S.humans.length;
+const saveHumans = () => sessionStorage.setItem(HUMANS_KEY, JSON.stringify(S.humans));
 const STREETS = { 0: "preflop", 3: "flop", 4: "turn", 5: "river" };
 const FROM_BUTTON = ["BTN", "CO", "HJ", "LJ", "MP", "UTG+2", "UTG+1", "UTG"];
 const $ = (id) => document.getElementById(id);
@@ -141,11 +212,27 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 function ingest(ev) {
   const g = S.games[ev.game_id];
   switch (ev.type) {
+    case "hello":
+      S.hello = true;
+      S.runId = ev.run_id;
+      if (S.humans.some((h) => h.runId !== ev.run_id)) {  // humans from an earlier server run
+        S.humans = S.humans.filter((h) => h.runId === ev.run_id);
+        saveHumans();
+        if (!S.humans.length) setShowAll(true);
+      }
+      break;
     case "meta": S.meta = ev; break;
     case "game":
       S.games[ev.game_id] = { id: ev.game_id, players: ev.players, seatOrder: ev.seat_order,
-        rotations: [], result: null, endings: {} };
+        rotations: [], result: null, endings: {}, joinedAt: {} };
       break;
+    case "join":
+      g.players[ev.player_id] = ev.name;
+      g.seatOrder.push(ev.player_id);
+      g.joinedAt[ev.player_id] = S.frames.length;
+      break;
+    case "seat": S.seatOf[`${ev.game_id}:${ev.player_id}`] = ev.human_id; break;
+    case "prompt": S.prompts[ev.human_id] = ev; break;
     case "round_start":
       S.rounds.push({ ...ev, actions: [], log: null, f0: S.frames.length });
       S.frames.push({ r: S.rounds.length - 1, s: -1 });
@@ -153,6 +240,7 @@ function ingest(ev) {
     case "action": {
       const r = S.rounds[S.rounds.length - 1];
       r.actions.push(ev);
+      for (const [h, p] of Object.entries(S.prompts)) if (p.game_id === ev.game_id && p.player_id === ev.player_id) delete S.prompts[h];
       S.frames.push({ r: S.rounds.length - 1, s: r.actions.length - 1 });
       break;
     }
@@ -178,7 +266,7 @@ function connect() {
   es.onopen = () => { if (S.status === "connecting") S.status = "live"; render(); };
   es.onmessage = (m) => {
     for (const ev of JSON.parse(m.data)) ingest(ev);
-    if (S.live) S.head = S.frames.length - 1;
+    if (S.live) { if (paced() && S.head >= 0) follow(); else S.head = S.frames.length - 1; }
     scheduleRender();
   };
   es.addEventListener("end", () => { es.close(); if (S.status !== "error") S.status = "done"; scheduleRender(); });
@@ -223,49 +311,89 @@ function tableState(r, s) {
     r.positions.forEach((p, i) => { stack[p] = r.log.starting_stacks[i] + r.log.chip_deltas[p]; bet[p] = 0; if (r.log.chip_deltas[p] > 0) winners.add(p); });
     pot = 0;
   }
-  return { n, stack, bet, last, folded, board, street, pot, winners,
+  return { n, stack, bet, last, folded, board, street, pot, winners, end: s === "end" && !!r.log,
     actor: typeof s === "number" && s >= 0 ? r.actions[s].player_id : null, next: next ? next.player_id : null };
 }
 
 // ---------------------------------------------------------------- rendering
 function cardHtml(c, cls = "") {
-  if (!c) return `<span class="card slot ${cls}"></span>`;
+  if (!c) return `<span class="card ${cls === "back" ? "back" : "slot " + cls}"></span>`;
   const suit = { S: "\u2660", H: "\u2665", D: "\u2666", C: "\u2663" }[c[0]];
   const rank = c[1] === "T" ? "10" : c[1];
   const red = c[0] === "H" || c[0] === "D" ? "red" : "";
   return `<span class="card ${red} ${cls}">${rank}${suit}</span>`;
 }
-function botTag(name) { return `<span class="bot-${esc(name)}">${esc(name)}</span>`; }
+const isHuman = (name) => name.endsWith(" (human)");
+/** Name as displayed: while bot names are hidden every bot reads "Bot" (humans keep theirs). */
+const shownName = (name) => (S.showNames || isHuman(name) ? name : "Bot");
+function botTag(name) {
+  if (isHuman(name)) return `<span class="bot-human">${esc(name)}</span>`;
+  // hidden names also drop the per-bot colour, which would give the bot away
+  return S.showNames ? `<span class="bot-${esc(name)}">${esc(name)}</span>` : '<span class="muted">Bot</span>';
+}
+/** A bot's explain() names its rules and style, so it is hidden along with the names. */
+const shownExplain = (g, a) => (S.showNames || isHuman(g.players[a.player_id]) ? String(a.explain || "") : "hidden while bot names are hidden");
+/** True if player p of this game is a human this tab plays. */
+function isMine(gameId, p) { const h = S.seatOf[`${gameId}:${p}`]; return h !== undefined && S.humans.some((x) => x.id === h); }
+function nameTag(g, gameId, p) { return botTag(g.players[p]) + (isMine(gameId, p) ? '<span class="you">YOU</span>' : ""); }
+
+/** The five cards of the biggest winner's showdown hand, or null without a showdown. */
+function winningCards(r) {
+  const hands = r.log.hands || {}, d = r.log.chip_deltas;
+  const top = r.positions.filter((p) => hands[p] && d[p] > 0).sort((a, b) => d[b] - d[a])[0];
+  return top === undefined ? null : new Set(hands[top].best);
+}
+
+/** "Who won" box shown on the table at the end of every hand. */
+function resultHtml(r, g) {
+  const d = r.log.chip_deltas, hands = r.log.hands || {};
+  const showdown = Object.keys(r.log.showdown_cards).length > 0;
+  const winners = r.positions.filter((p) => d[p] > 0).sort((a, b) => d[b] - d[a]);
+  const lines = winners.map((p) => `<div class="line">${nameTag(g, r.game_id, p)} wins <b class="pos-val">${fmt(d[p])} bb</b>` +
+    (hands[p] ? ` with <b>${esc(hands[p].name)}</b>` : "") + "</div>");
+  if (!winners.length) lines.push('<div class="line">Pot split evenly: nobody gained chips</div>');
+  for (const p of r.positions) {
+    if (isMine(r.game_id, p) && !(d[p] > 0)) lines.push(`<div class="line">You (#${p}): <span class="${d[p] < 0 ? "neg-val" : ""}">${signed(d[p])} bb</span></div>`);
+  }
+  const losers = r.positions.filter((p) => hands[p] && !(d[p] > 0)).map((p) => `${nameTag(g, r.game_id, p)} ${esc(hands[p].name)}`);
+  const note = !showdown ? "Everyone else folded, so no cards were shown." : losers.length ? `Also shown: ${losers.join(" · ")}` : "";
+  return `<div class="result"><h3>${showdown ? "Showdown" : "Won without showdown"}</h3>${lines.join("")}${note ? `<div class="others">${note}</div>` : ""}</div>`;
+}
 function actionLabel(a) { return a.action.replace(/_/g, " ") + (a.cost ? ` ${fmt(a.cost)}` : ""); }
 
 function renderTable(r, st, g) {
   const wrap = $("table");
+  const best = st.end ? winningCards(r) : null;
   const seats = r.positions.map((p, i) => {
     const angle = Math.PI / 2 + (2 * Math.PI * (i + 0.5)) / st.n;
     const x = 50 + 44 * Math.cos(angle), y = 50 + 40 * Math.sin(angle);
     const pos = positionName(i, st.n);
     const hole = r.hole_cards[p] || [];
-    const show = S.showCards || (st.winners.size && r.log && r.log.showdown_cards[p]);
-    const cards = show ? hole.map((c) => cardHtml(c)).join("") : cardHtml(null, "back") + cardHtml(null, "back");
+    const mine = isMine(r.game_id, p);
+    const show = S.showAll || mine || (st.end && r.log.showdown_cards[p]);
+    const cards = show ? hole.map((c) => cardHtml(c, best && best.has(c) ? "hi" : "")).join("") : cardHtml(null, "back") + cardHtml(null, "back");
     const cls = ["seat"];
     if (st.folded.has(p)) cls.push("folded");
     if (st.actor === p) cls.push("actor");
     if (st.next === p) cls.push("next");
     if (st.winners.has(p)) cls.push("winner");
+    if (mine) cls.push("mine");
     const last = st.last[p];
-    const delta = r.log && st.winners.size ? r.log.chip_deltas[p] : null;
+    const delta = st.end ? r.log.chip_deltas[p] : null;
     const lastTxt = delta !== null ? `<span class="${delta >= 0 ? "pos-val" : "neg-val"}">${signed(delta)} bb</span>` : last ? esc(actionLabel(last)) : "";
     return `<div class="${cls.join(" ")}" style="left:${x}%;top:${y}%">
       <div class="top"><span class="name">${botTag(g.players[p])}</span><span class="pos ${pos}">${pos}</span></div>
-      <div class="top"><span class="muted">#${p}</span><span class="stack">${fmt(st.stack[p])} bb${st.stack[p] <= 1e-9 && !st.folded.has(p) ? " (all-in)" : ""}</span></div>
+      <div class="top"><span><span class="muted">#${p}</span>${mine ? '<span class="you">YOU</span>' : ""}</span><span class="stack">${fmt(st.stack[p])} bb${st.stack[p] <= 1e-9 && !st.folded.has(p) ? " (all-in)" : ""}</span></div>
       <div class="cards">${cards}</div>
       <div class="bet">${st.bet[p] > 0 ? "bet " + fmt(st.bet[p]) : ""}</div>
       <div class="last">${lastTxt}</div></div>`;
   }).join("");
-  const board = [0, 1, 2, 3, 4].map((i) => cardHtml(st.board[i])).join("");
+  const board = [0, 1, 2, 3, 4].map((i) => cardHtml(st.board[i], best && st.board[i] ? (best.has(st.board[i]) ? "hi" : "dim") : "")).join("");
   const streetName = STREETS[st.street] || "";
-  wrap.innerHTML = `<div class="felt"></div><div class="center"><div class="street">${streetName}${r.log && st.winners.size ? " · showdown / result" : ""}</div>
-    <div class="cards board">${board}</div><div class="pot">Pot ${fmt(st.pot)} bb</div></div>${seats}`;
+  const center = st.end
+    ? `<div class="center end"><div class="cards board">${board}</div>${resultHtml(r, g)}</div>`
+    : `<div class="center"><div class="street">${streetName}</div><div class="cards board">${board}</div><div class="pot">Pot ${fmt(st.pot)} bb</div></div>`;
+  wrap.innerHTML = `<div class="felt"></div>${center}${seats}`;
 }
 
 function renderDecision(r, s, g) {
@@ -274,14 +402,16 @@ function renderDecision(r, s, g) {
   if (s === "end") {
     const rows = r.positions.map((p) => [p, r.log.chip_deltas[p]]).sort((a, b) => b[1] - a[1]);
     const sd = Object.keys(r.log.showdown_cards).length ? "Showdown" : "Won without showdown";
-    el.innerHTML = `<div class="muted">${sd}</div><table class="grid"><tr><th class="l">Player</th><th>Change</th></tr>` +
-      rows.map(([p, d]) => `<tr><td>${botTag(g.players[p])} <span class="muted">#${p}</span></td><td class="${d > 0 ? "pos-val" : d < 0 ? "neg-val" : ""}">${signed(d)}</td></tr>`).join("") + "</table>";
+    const hands = r.log.hands || {};
+    el.innerHTML = `<div class="muted">${sd}</div><table class="grid"><tr><th class="l">Player</th><th class="l">Hand</th><th>Change</th></tr>` +
+      rows.map(([p, d]) => `<tr><td>${nameTag(g, r.game_id, p)} <span class="muted">#${p}</span></td><td class="l">${hands[p] ? esc(hands[p].name) : ""}</td>` +
+        `<td class="${d > 0 ? "pos-val" : d < 0 ? "neg-val" : ""}">${signed(d)}</td></tr>`).join("") + "</table>";
     return;
   }
   const a = r.actions[s];
   const legal = a.legal.map(([name, cost]) => `<span class="${name === a.action ? "chosen" : ""}">${esc(name.replace(/_/g, " "))} ${fmt(cost)}</span>`).join("");
-  const text = String(a.explain || "").split("; ").join("\n");
-  el.innerHTML = `<div>${botTag(g.players[a.player_id])} <span class="muted">#${a.player_id}</span> chose <b>${esc(actionLabel(a))}</b>
+  const text = shownExplain(g, a).split("; ").join("\n");
+  el.innerHTML = `<div>${nameTag(g, r.game_id, a.player_id)} <span class="muted">#${a.player_id}</span> chose <b>${esc(actionLabel(a))}</b>
     <span class="muted">· pot ${fmt(a.pot)} before</span></div><div class="legal">${legal}</div><div class="explain">${esc(text)}</div>`;
 }
 
@@ -294,9 +424,9 @@ function locationText(r, s, g) {
   const path = (S.meta && S.meta.log_file) || null;
   const sel = `select(.type=="round" and .game_id==${r.game_id} and .rotation_id==${r.rotation_id} and .round_id==${r.round_id})`;
   const lines = [
-    `game_id=${r.game_id} rotation_id=${r.rotation_id} round_id=${r.round_id} (round ${r.round_id + 1} of ${n}) seed=${r.seed}`,
-    `seats: ${r.positions.map((p, i) => `${positionName(i, n)} #${p} ${g.players[p]}`).join(", ")}`,
-    `hole cards: ${r.positions.map((p) => `#${p} ${cardList(r.hole_cards[p])}`).join(", ")}`,
+    `game_id=${r.game_id} rotation_id=${r.rotation_id} round_id=${r.round_id} (${S.meta && S.meta.mode === "play" ? `play mode, hand ${r.rotation_id}` : `round ${r.round_id + 1} of ${n}`}) seed=${r.seed}`,
+    `seats: ${r.positions.map((p, i) => `${positionName(i, n)} #${p} ${shownName(g.players[p])}`).join(", ")}`,
+    `hole cards: ${r.positions.map((p) => `#${p} ${S.showAll || isMine(r.game_id, p) || (s === "end" && r.log && r.log.showdown_cards[p]) ? cardList(r.hole_cards[p]) : "hidden"}`).join(", ")}`,
   ];
   let filter;
   if (s === -1) {
@@ -312,10 +442,10 @@ function locationText(r, s, g) {
     const before = tableState(r, s - 1);
     const pos = positionName(r.positions.indexOf(a.player_id), n);
     lines.push(`step: action ${s} (0-based; the header shows ${s + 1}) · street ${STREETS[a.board.length] || "preflop"}`);
-    lines.push(`player: #${a.player_id} ${g.players[a.player_id]} at ${pos} chose ${a.action}${a.cost ? " " + fmt(a.cost) : ""}`);
+    lines.push(`player: #${a.player_id} ${shownName(g.players[a.player_id])} at ${pos} chose ${a.action}${a.cost ? " " + fmt(a.cost) : ""}`);
     lines.push(`before: pot ${fmt(before.pot)} bb · board ${cardList(before.board)} · stacks ${r.positions.map((p) => `#${p} ${fmt(before.stack[p])}`).join(", ")}`);
     lines.push(`legal: ${a.legal.map(([nm, c]) => `${nm} ${fmt(c)}${nm === a.action ? " (chosen)" : ""}`).join(", ")}`);
-    lines.push(`explain: ${a.explain || "-"}`);
+    lines.push(`explain: ${shownExplain(g, a) || "-"}`);
     filter = `.actions[${s}]`;
   }
   if (!path) lines.push("log: none (viewer started with --no-logs)");
@@ -343,7 +473,11 @@ function renderActions(r, s, g) {
   if (r.log) html += `<div data-f="${base + 1 + r.actions.length}" class="${s === "end" ? "cur" : ""}"><span class="st">end</span><span class="muted">pot awarded</span></div>`;
   el.innerHTML = html;
   const cur = el.querySelector(".cur");
-  if (cur) cur.scrollIntoView({ block: "nearest" });
+  if (cur) {  // scroll the log box only; scrollIntoView would also scroll the page away from the action buttons
+    const top = cur.offsetTop, bottom = top + cur.offsetHeight;
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight;
+  }
 }
 
 function rotationStarts(g, rotationId) {
@@ -361,16 +495,18 @@ function rotationStarts(g, rotationId) {
 
 function renderLeaderboard(r, st, g) {
   const { out, elim } = rotationStarts(g, r.rotation_id);
-  const rows = g.seatOrder.map((p) => ({ p, start: out[p], now: p in st.stack ? st.stack[p] : null, elim: elim[p] }));
+  const rows = g.seatOrder.filter((p) => seatedNow(g, p)).map((p) => ({ p, start: out[p], now: p in st.stack ? st.stack[p] : null, elim: elim[p] }));
   rows.sort((a, b) => (a.elim ? 1 : 0) - (b.elim ? 1 : 0) || b.start - a.start || (b.elim || 0) - (a.elim || 0));
-  $("leaderboard").innerHTML = `<table class="grid"><tr><th class="l">#</th><th class="l">Bot</th><th>Rotation start</th><th>This round</th><th>Status</th></tr>` +
-    rows.map((x, i) => `<tr><td class="l">${i + 1}</td><td class="l">${botTag(g.players[x.p])} <span class="muted">#${x.p}</span></td>
-      <td>${fmt(x.start)}</td><td>${x.now === null ? "-" : fmt(x.now)}</td><td>${x.elim ? `<span class="neg-val">out (rot ${x.elim})</span>` : "alive"}</td></tr>`).join("") + "</table>";
+  const play = S.meta && S.meta.mode === "play";
+  $("leaderboard").innerHTML = `<table class="grid"><tr><th class="l">#</th><th class="l">Bot</th><th>${play ? "Hand start" : "Rotation start"}</th><th>${play ? "Now" : "This round"}</th><th>Status</th></tr>` +
+    rows.map((x, i) => `<tr><td class="l">${i + 1}</td><td class="l">${nameTag(g, g.id, x.p)} <span class="muted">#${x.p}</span></td>
+      <td>${fmt(x.start)}</td><td>${x.now === null ? "-" : fmt(x.now)}</td><td>${x.elim ? `<span class="neg-val">out (${play ? "hand" : "rot"} ${x.elim})</span>` : "alive"}</td></tr>`).join("") + "</table>";
 }
 
 function renderOverall() {
   const finished = Object.values(S.games).filter((g) => g.result && g.result.at <= S.head + 1);
   if (!finished.length) { $("overall").innerHTML = "No finished games yet."; return; }
+  if (!S.showNames) { $("overall").innerHTML = "Hidden while bot names are hidden (press N to show)."; return; }
   const by = {};
   for (const g of finished) {
     for (const p of g.result.standings) {
@@ -415,7 +551,7 @@ function renderHistory(g) {
   const shown = rots.slice(-12);
   let html = `<table class="grid"><tr><th class="l">Bot</th><th>Start</th>${shown.map((x) => `<th>after ${x.rotation_id}</th>`).join("")}</tr>`;
   const start = S.meta ? S.meta.starting_stack : 100;
-  for (const p of g.seatOrder) {
+  for (const p of g.seatOrder.filter((q) => seatedNow(g, q))) {
     html += `<tr><td class="l">${botTag(g.players[p])} <span class="muted">#${p}</span></td><td>${fmt(start)}</td>`;
     for (const x of shown) {
       if (x.eliminated.includes(Number(p))) html += `<td class="neg-val">out</td>`;
@@ -446,9 +582,11 @@ function renderHeader(r, s, g) {
 }
 
 function render() {
+  renderChrome();
+  renderHumans();
   if (S.head < 0 || !S.frames.length) {
     const pill = $("status");
-    pill.textContent = S.status === "error" ? "error: " + S.error : S.status;
+    pill.textContent = S.status === "error" ? "error: " + S.error : S.hello && !S.meta ? "waiting for a choice" : S.status === "live" ? "running" : S.status;
     return;
   }
   S.head = Math.min(S.head, S.frames.length - 1);
@@ -467,6 +605,117 @@ function render() {
   renderHistory(g);
 }
 
+// ---------------------------------------------------------------- human players
+const paced = () => S.humans.length > 0;
+const caughtUp = () => S.head === S.frames.length - 1;
+const ACTION_NAMES = { fold: "Fold", check: "Check", call: "Call", raise_half_pot: "Raise \u00bd pot", raise_pot: "Raise pot", all_in: "All in" };
+/** Players who joined mid-game appear in the tables from their join onwards. */
+const seatedNow = (g, p) => !(p in g.joinedAt) || g.joinedAt[p] <= S.head;
+
+/** Newest game this human was seated in: { game, pid }, or null before the first seat. */
+function seatOfHuman(id) {
+  let best = null;
+  for (const [key, h] of Object.entries(S.seatOf)) {
+    const [game, pid] = key.split(":").map(Number);
+    if (h === id && (!best || game > best.game)) best = { game, pid };
+  }
+  return best;
+}
+
+function humanStatus(h, p) {
+  if (p) return `<b>Your turn</b> as #${p.player_id}: ${S.live ? "catching up with the table\u2026" : '<button data-live="1">Go live (L) to act</button>'}`;
+  if (S.status === "done") return "The run has finished.";
+  const seat = seatOfHuman(h.id);
+  if (!seat) return "Dealt in at the next hand.";
+  const g = S.games[seat.game];
+  const out = g && g.rotations.some((x) => x.eliminated.includes(seat.pid));
+  if (g && (g.result || out)) return `${g.result ? "Game over" : "Busted out of this game"}; dealt in again when the next game starts.`;
+  return `Seated as #${seat.pid}. Waiting for your turn.`;
+}
+
+function humanHtml(h) {
+  const p = S.prompts[h.id];
+  const turn = p && caughtUp();
+  const status = turn ? `<b>Your turn</b> as #${p.player_id}` : humanStatus(h, p);
+  const acts = !turn ? "" : `<div class="acts">${p.legal.map(([a, cost], i) =>
+    `<button data-h="${h.id}" data-act="${esc(a)}"${p.sent ? " disabled" : ""}>${i + 1} \u00b7 ${ACTION_NAMES[a] || esc(a)}${cost ? " " + fmt(cost) : ""}</button>`).join("")}</div>`;
+  return `<div class="human${turn ? " turn" : ""}"><b class="bot-human">${esc(h.name)}</b><span>${status}</span>${acts}` +
+    `<button class="leave" data-leave="${h.id}" title="Your remaining decisions this game are check/fold; you are not dealt into later games">Leave table</button></div>`;
+}
+
+let humansHtml = "";
+function renderHumans() {
+  $("humans").hidden = !S.humans.length && $("join-form").hidden;
+  const html = S.humans.map(humanHtml).join("");
+  if (html !== humansHtml) { humansHtml = html; $("human-list").innerHTML = html; }  // keep buttons stable between clicks
+}
+
+/** Start popup until a mode is picked; play mode relabels rotations as hands. */
+function renderChrome() {
+  const play = !!S.meta && S.meta.mode === "play";
+  $("start").hidden = !S.hello || !!S.meta || S.chosen;
+  $("b-join").hidden = !play || S.status === "done";
+  document.body.classList.toggle("sandbox", play);
+  $("l-rot").textContent = play ? "Hand" : "Rotation";
+  $("history-title").textContent = play ? "Stack history: after each hand (bb)" : "Rotation history: starting stacks (bb)";
+}
+
+function addHuman(j) {
+  S.humans.push({ id: j.human_id, token: j.token, name: j.name, runId: S.runId });
+  saveHumans();
+  setPlaying(false); S.live = true; S.head = S.frames.length - 1;
+  setShowAll(false);
+}
+async function start(mode) {
+  if (S.starting) return;
+  S.starting = true;
+  try {
+    const j = await post("/start", { mode, name: $("start-name").value });
+    S.chosen = true;
+    $("start-msg").textContent = "";
+    if (mode === "play") {
+      if ($("start-hide-names").checked) setShowNames(false);
+      addHuman(j);
+    } else render();
+  } catch (err) { $("start-msg").textContent = err.message; }
+  finally { S.starting = false; }
+}
+
+function humanMsg(text) { $("human-msg").textContent = text; }
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { status: res.status });
+  return data;
+}
+function forget(h) { S.humans = S.humans.filter((x) => x !== h); saveHumans(); }
+
+async function sendAction(id, action) {
+  const h = S.humans.find((x) => x.id === id), p = S.prompts[id];
+  if (!h || !p || p.sent) return;
+  p.sent = action; humanMsg(""); renderHumans();
+  try { await post("/human/act", { token: h.token, prompt_id: p.prompt_id, action }); }
+  catch (err) { p.sent = null; humanMsg(`${h.name}: ${err.message}`); if (err.status === 404) forget(h); renderHumans(); }
+}
+async function leave(id) {
+  const h = S.humans.find((x) => x.id === id);
+  if (!h) return;
+  try { await post("/human/leave", { token: h.token }); }
+  catch (err) { if (err.status !== 404) { humanMsg(err.message); return; } }
+  forget(h); humanMsg(""); render();
+}
+function setShowAll(on) {
+  S.showAll = on;
+  $("b-cards").textContent = on ? "Hole cards: everyone" : "Hole cards: yours only";
+  $("b-cards").classList.toggle("on", on);
+  render();
+}
+function setShowNames(on) {
+  S.showNames = on;
+  $("b-names").textContent = on ? "Bot names: shown" : "Bot names: hidden";
+  $("b-names").classList.toggle("on", on);
+  render();
+}
 // ---------------------------------------------------------------- controls
 function seek(i) { S.head = Math.max(0, Math.min(i, S.frames.length - 1)); S.live = false; render(); }
 function roundJump(dir) {
@@ -499,16 +748,25 @@ function rotationJump(dir) {
   if (target >= 0) seek(S.rounds[target].f0);
 }
 let timer = null;
+function schedule(ms) { clearTimeout(timer); timer = setTimeout(tick, ms); }
+/** Show the next buffered step: while playing, or while following live with a human seated
+ *  (bots act faster than anyone can read, so the page replays them at the chosen speed and
+ *  holds every hand's result for RESULT_HOLD_MS). */
+function tick() {
+  timer = null;
+  if (!S.playing && !S.live) return;
+  if (S.head < S.frames.length - 1) {
+    S.head++; render();
+    schedule(S.frames[S.head].s === "end" && paced() ? RESULT_HOLD_MS : 1000 / S.speed);
+  } else if (S.playing) {
+    if (S.status === "done" || S.status === "error") setPlaying(false); else schedule(1000 / S.speed);
+  }
+}
+function follow() { if (!timer) schedule(1000 / S.speed); }
 function setPlaying(on) {
   S.playing = on;
-  clearInterval(timer);
-  if (on) {
-    S.live = false;
-    timer = setInterval(() => {
-      if (S.head < S.frames.length - 1) { S.head++; render(); }
-      else if (S.status === "done" || S.status === "error") setPlaying(false);
-    }, 1000 / S.speed);
-  }
+  clearTimeout(timer); timer = null;
+  if (on) { S.live = false; schedule(1000 / S.speed); }
   render();
 }
 $("b-play").onclick = () => setPlaying(!S.playing);
@@ -519,11 +777,26 @@ $("b-next-round").onclick = () => { setPlaying(false); roundJump(1); };
 $("b-prev-rot").onclick = () => { setPlaying(false); rotationJump(-1); };
 $("b-next-rot").onclick = () => { setPlaying(false); rotationJump(1); };
 $("b-live").onclick = () => { setPlaying(false); S.live = true; S.head = S.frames.length - 1; render(); };
-$("b-cards").onclick = () => {
-  S.showCards = !S.showCards;
-  $("b-cards").textContent = S.showCards ? "Hole cards: all" : "Hole cards: showdown only";
-  $("b-cards").classList.toggle("on", S.showCards);
-  render();
+$("b-cards").onclick = () => setShowAll(!S.showAll);
+$("b-names").onclick = () => setShowNames(!S.showNames);
+$("b-join").onclick = () => { $("join-form").hidden = false; renderHumans(); $("join-name").focus(); };
+$("join-cancel").onclick = () => { $("join-form").hidden = true; humanMsg(""); renderHumans(); };
+$("join-form").onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    addHuman(await post("/human/join", { name: $("join-name").value }));
+    $("join-form").hidden = true; $("join-name").value = ""; humanMsg("");
+    render();
+  } catch (err) { humanMsg(err.message); renderHumans(); }
+};
+$("start-form").onsubmit = (e) => { e.preventDefault(); start("play"); };
+$("start-watch").onclick = () => start("watch");
+$("human-list").onclick = (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.live) $("b-live").click();
+  else if (b.dataset.act) sendAction(Number(b.dataset.h), b.dataset.act);
+  else if (b.dataset.leave) leave(Number(b.dataset.leave));
 };
 $("speed").onchange = (e) => { S.speed = Number(e.target.value); if (S.playing) setPlaying(true); };
 $("scrub").oninput = (e) => { setPlaying(false); seek(Number(e.target.value)); };
@@ -547,7 +820,14 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "]") { setPlaying(false); rotationJump(1); }
   else if (e.key === "l" || e.key === "L") $("b-live").click();
   else if (e.key === "h" || e.key === "H") $("b-cards").click();
+  else if (e.key === "n" || e.key === "N") $("b-names").click();
+  else if (/^[1-9]$/.test(e.key) && caughtUp()) {
+    const h = S.humans.find((x) => S.prompts[x.id] && !S.prompts[x.id].sent);
+    const choice = h && S.prompts[h.id].legal[Number(e.key) - 1];
+    if (choice) sendAction(h.id, choice[0]);
+  }
 });
+setShowAll(S.showAll);
 connect();
 </script>
 </body>

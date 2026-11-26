@@ -44,14 +44,18 @@ five full games and JSONL round logs.
 Every finished run (tournament command or live viewer) adds its overall
 standings to the top of [`LEADERBOARD.md`](LEADERBOARD.md), headed with the number of games.
 
-### Live viewer (watch games in the browser)
+### Live viewer (watch or play in the browser)
 
 1. Start the viewer server from the project root:
    ```bash
    PYTHONPATH=src .venv/bin/python -m pokerbots.web --games 1 --rotations 20
    ```
-   It prints `Live viewer: http://localhost:8765/` and starts playing.
-2. Open http://localhost:8765/ in any browser.
+   It prints `Live viewer: http://localhost:8765/`.
+2. Open http://localhost:8765/ in any browser and pick a mode in the popup:
+   - **Watch the simulation:** the bot tournament, with its match log and
+     `LEADERBOARD.md` entry.
+   - **Join as a player:** play against the bots in a sandbox. Fresh cards every
+     hand, no rotations, nothing logged. Any number of humans can join.
 3. Press Space to play or pause. Stop the server with Ctrl+C.
 4. To report a bug at a step, click **Copy location** in the "You are here" panel.
    It gives the game, rotation, round and action IDs from the match log in `roundlogs/`.

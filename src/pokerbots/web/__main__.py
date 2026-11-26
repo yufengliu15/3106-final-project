@@ -3,11 +3,17 @@
     PYTHONPATH=src .venv/bin/python -m pokerbots.web --games 1 --rotations 20
     open http://localhost:8765/
 
-Runs a tournament (same bots as `python -m pokerbots.tournament`) in a
-background thread and streams every event to live.html over server-sent
-events: the deal with everyone's hole cards, every decision with the bot's
-explain(), round results, rotation stacks and game results. The page buffers
-the stream, so you can pause, step back and replay while the run continues.
+Nothing runs until the page picks a mode (POST /start):
+    watch -- the tournament (same bots as `python -m pokerbots.tournament`),
+             with its match log and LEADERBOARD.md entry;
+    play  -- humans against the same bots in a sandbox (sandbox.py): fresh
+             cards every hand, no rotations, nothing written to disk.
+
+The run happens in a background thread and every event streams to live.html
+over server-sent events: the deal with everyone's hole cards, every decision
+with the bot's explain(), round results, stacks and game results. The page
+buffers the stream, so you can pause, step back and replay while it runs.
+Humans are HumanSeat bots (humans.py) and can join only in play mode.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,11 +29,17 @@ from urllib.parse import parse_qs, urlparse
 
 from pokerbots.tournament import Tournament, TournamentConfig
 from pokerbots.tournament.__main__ import DEFAULT_CONFIG, ROUNDLOGS_DIR, default_log_path, prepend_leaderboard
+from pokerbots.web.hands import showdown_hands
+from pokerbots.web.humans import HumanSeat, Lobby
+from pokerbots.web.sandbox import Sandbox
+
+MODES = ("watch", "play")
 
 REPO_ROOT = ROUNDLOGS_DIR.parent
 
 HTML = Path(__file__).with_name("live.html")
 KEEPALIVE_S = 15.0
+MAX_BODY = 4096
 
 
 class Feed:
@@ -64,22 +77,127 @@ def display_path(path: Path | None) -> str | None:
     return str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
 
 
-def run_tournament(feed: Feed, config: TournamentConfig) -> None:
-    feed.add({"type": "meta", "games": config.games, "rotations": config.rotations, "seats": config.seats,
-              "starting_stack": config.starting_stack, "k": config.k, "mode": config.mode,
-              "base_seed": config.base_seed, "log_file": display_path(config.log_file)})
+def observe(feed: Feed, record: dict) -> None:
+    """Tournament observer: every record goes to the page; showdown rounds also
+    get each shown hand's name and best five cards for the result screen."""
+    if record["type"] == "round" and record["showdown_cards"]:
+        record = {**record, "hands": showdown_hands(record["community_cards"], record["showdown_cards"])}
+    feed.add(record)
+
+
+class Session:
+    """One server run: waits for the page to pick watch or play, then runs it once."""
+
+    def __init__(self, config: TournamentConfig, play_seed: int) -> None:
+        self.config = config
+        self.play_seed = play_seed
+        self.feed = Feed()
+        self.lobby = Lobby(self.feed.add, config.seats)
+        self.mode: str | None = None
+        self.run_id = secrets.token_hex(4)
+        self._lock = threading.Lock()
+        self.feed.add({"type": "hello", "run_id": self.run_id})
+
+    def choose(self, mode: str) -> tuple[bool, str | None]:
+        """(this call picked the mode, error). Choosing the mode already running is fine."""
+        with self._lock:
+            if self.mode is None:
+                self.mode = mode
+                return True, None
+        if self.mode == mode:
+            return False, None
+        return False, f"this run already started in {self.mode} mode; restart the server to switch"
+
+    def launch(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        watch = self.mode == "watch"
+        config = self.config if watch else dataclasses.replace(self.config, log_file=None, base_seed=self.play_seed)
+        self.feed.add({"type": "meta", "mode": self.mode, "games": config.games, "rotations": config.rotations,
+                       "seats": config.seats, "starting_stack": config.starting_stack, "k": config.k,
+                       "base_seed": config.base_seed, "log_file": display_path(config.log_file),
+                       "run_id": self.run_id})
+        observer = lambda record: observe(self.feed, record)  # noqa: E731
+        try:
+            if watch:
+                prepend_leaderboard(Tournament(config, observer=observer).run(), config)
+            else:
+                Sandbox(config, observer=observer, extra_players=self.lobby.players).run()
+            self.feed.add({"type": "done"})
+        except Exception as exc:
+            self.feed.add({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
+            raise
+        finally:
+            self.feed.finish()
+
+
+def read_json(headers, rfile) -> dict | None:
+    """A POST body that is a JSON object of at most MAX_BODY bytes, else None."""
+    length = headers.get("Content-Length") or "0"
+    if not length.isdigit() or int(length) > MAX_BODY:
+        return None
     try:
-        results = Tournament(config, observer=feed.add).run()
-        prepend_leaderboard(results, config)
-        feed.add({"type": "done"})
-    except Exception as exc:
-        feed.add({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
-        raise
-    finally:
-        feed.finish()
+        body = json.loads(rfile.read(int(length)) or b"{}")
+    except ValueError:  # includes JSONDecodeError and bad UTF-8
+        return None
+    return body if isinstance(body, dict) else None
 
 
-def make_handler(feed: Feed) -> type[BaseHTTPRequestHandler]:
+def join_request(session: Session, body: dict) -> tuple[int, dict]:
+    if session.mode != "play":
+        return 409, {"error": "humans can only join in play mode; restart the server and pick Join as a player"}
+    if session.feed.done:
+        return 409, {"error": "the run has finished; restart the server to play"}
+    try:
+        seat = session.lobby.join(str(body.get("name", "")))
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    return 200, {"human_id": seat.human_id, "token": seat.token, "name": seat.name}
+
+
+def start_request(session: Session, body: dict) -> tuple[int, dict]:
+    """Pick the mode. Play also joins the caller as a human before the first deal."""
+    mode = body.get("mode")
+    if mode not in MODES:
+        return 400, {"error": f"mode must be one of {MODES}"}
+    picked, error = session.choose(mode)
+    if error:
+        return 409, {"error": error}
+    reply = join_request(session, body) if mode == "play" else (200, {})
+    if picked:
+        session.launch()
+    return reply
+
+
+def post_request(session: Session, path: str, body: dict | None) -> tuple[int, dict]:
+    """POST /start and /human/{join,act,leave}: (HTTP status, JSON reply). body None = unreadable."""
+    if body is None:
+        return 400, {"error": f"expected a JSON object of at most {MAX_BODY} bytes"}
+    if path == "/start":
+        return start_request(session, body)
+    if path == "/human/join":
+        return join_request(session, body)
+    return seat_request(session, path, body)
+
+
+def seat_request(session: Session, path: str, body: dict) -> tuple[int, dict]:
+    """/human/act and /human/leave, for the human holding body["token"]."""
+    found: HumanSeat | None = session.lobby.get(str(body.get("token", "")))
+    if found is None:
+        return 404, {"error": "unknown player (was the server restarted?)"}
+    if path == "/human/act":
+        error = found.choose(body.get("prompt_id"), str(body.get("action", "")))
+        return (409, {"error": error}) if error else (200, {})
+    if path == "/human/leave":
+        found.leave()
+        return 200, {}
+    return 404, {"error": f"no endpoint {path}"}
+
+
+def make_handler(session: Session) -> type[BaseHTTPRequestHandler]:
+    feed = session.feed
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 (http.server API)
             url = urlparse(self.path)
@@ -94,6 +212,18 @@ def make_handler(feed: Feed) -> type[BaseHTTPRequestHandler]:
                 self._stream(url.query)
             else:
                 self.send_error(404)
+
+        def do_POST(self) -> None:  # noqa: N802 (http.server API)
+            body = read_json(self.headers, self.rfile)
+            self._json(*post_request(session, urlparse(self.path).path, body))
+
+        def _json(self, status: int, payload: dict) -> None:
+            data = json.dumps(payload).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
 
         def _stream(self, query: str) -> None:
             # Resume after a reconnect: EventSource resends the last id it saw.
@@ -146,12 +276,12 @@ def main() -> None:
     if not args.no_logs:
         config = dataclasses.replace(config, log_file=default_log_path(args.log_file))
 
-    feed = Feed()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(feed))
+    session = Session(config, play_seed=args.seed if args.seed is not None else secrets.randbelow(2**31))
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(session))
     server.daemon_threads = True
-    threading.Thread(target=run_tournament, args=(feed, config), daemon=True).start()
     print(f"Live viewer: http://localhost:{args.port}/  (Ctrl+C to stop)")
-    print(f"Match log: {display_path(config.log_file) or 'off (--no-logs)'}")
+    print("Open it and pick Watch (tournament) or Join as a player (sandbox, no logs).")
+    print(f"Match log in watch mode: {display_path(config.log_file) or 'off (--no-logs)'}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
