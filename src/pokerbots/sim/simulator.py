@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 import rlcard
 from rlcard.games.limitholdem import PlayerStatus
+from rlcard.games.limitholdem.utils import compare_hands
 from rlcard.games.nolimitholdem.round import Action
 
 from pokerbots.core import (
@@ -51,6 +52,36 @@ def bb_to_chips(bb: float) -> int:
 
 def chips_to_bb(chips: float) -> float:
     return float(chips) / CHIPS_PER_BB
+
+
+def settle_pots(in_chips: Sequence[int], hands: Sequence[Sequence[str] | None]) -> list[int]:
+    """Chip change per seat after splitting the main pot and side pots.
+
+    `hands[i]` is seat i's hole + board card indices, or None if it folded.
+    Each pot layer is won by the best hand among the players who put that
+    layer in (folded chips stay in the pot); ties split it, and an odd chip
+    goes to the winner closest to the left of the button (lowest seat, SB first).
+    RLCard's judger ranks hands once over everyone, so when the overall winner
+    is all-in it hands every side pot back to its contributors instead.
+    """
+    live = [i for i, h in enumerate(hands) if h is not None]
+    won = [0] * len(in_chips)
+    levels = sorted({in_chips[i] for i in live})
+    prev = 0
+    for n, level in enumerate(levels):
+        top = float("inf") if n == len(levels) - 1 else level  # top layer also takes folded overbets
+        pot = sum(min(c, top) - min(c, prev) for c in in_chips)
+        eligible = [i for i in live if in_chips[i] >= level]
+        if len(eligible) == 1:
+            winners = eligible
+        else:
+            flags = compare_hands([hands[i] if i in eligible else None for i in range(len(hands))])
+            winners = [i for i in eligible if flags[i]]
+        share, odd = divmod(pot, len(winners))
+        for k, i in enumerate(winners):
+            won[i] += share + (1 if k < odd else 0)
+        prev = level
+    return [w - c for w, c in zip(won, in_chips, strict=True)]
 
 
 @dataclass(frozen=True)
@@ -158,6 +189,12 @@ class Simulator:
             round_id=self.round_id,
         )
 
+    def hole_cards(self) -> dict[int, tuple[str, str]]:
+        """Every player's hole cards, keyed by player ID. For observers (live
+        viewer, logs); never pass this to a bot."""
+        return {pid: tuple(c.get_index() for c in p.hand)
+                for pid, p in zip(self.positions, self._game.players, strict=True)}
+
     # --- Playing ---------------------------------------------------------------
 
     def step(self, action: str) -> None:
@@ -195,7 +232,14 @@ class Simulator:
         if not self.is_over():
             raise RuntimeError("round is not finished")
         game = self._game
-        payoffs = game.get_payoffs()
+        payoffs = settle_pots(
+            [p.in_chips for p in game.players],
+            [
+                None if p.status == PlayerStatus.FOLDED
+                else [c.get_index() for c in p.hand + game.public_cards]
+                for p in game.players
+            ],
+        )
         live = [i for i, p in enumerate(game.players) if p.status != PlayerStatus.FOLDED]
         showdown = (
             {self.positions[i]: tuple(c.get_index() for c in game.players[i].hand) for i in live}
@@ -308,10 +352,16 @@ class Simulator:
     def _skip_all_in_players(self) -> None:
         """RLCard's turn order only skips folded players, so it can hand the turn
         to an all-in player. They have no decision: pass for them (0 chips),
-        without asking the bot or logging an action."""
+        without asking the bot or logging an action.
+
+        A blind that takes a player's whole stack leaves them at 0 chips but
+        still ALIVE (RLCard only sets ALLIN inside an action), so skip on 0 chips
+        left; the pass then marks them ALLIN the same way an all-in action does."""
         game = self._game
-        while not game.is_over() and game.players[game.game_pointer].status == PlayerStatus.ALLIN:
+        while not game.is_over():
             player = game.players[game.game_pointer]
+            if player.status == PlayerStatus.FOLDED or player.remained_chips > 0:
+                break
             before = player.in_chips
             game.step(Action.CHECK_CALL)
             assert player.in_chips == before, "all-in player was charged chips"

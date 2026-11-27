@@ -9,6 +9,8 @@ Stats (all fractions 0-1 except aggression):
     pfr            -- raised (or shoved) pre-flop
     aggression     -- (raises + all-ins) / calls over all streets
     fold_to_raise  -- folds / times the player acted facing a raise on that street
+    call_to_raise  -- calls / times the player acted facing a raise on that street
+    raise_to_raise -- re-raises (incl. all-in) / times the player acted facing a raise
     allin_rate     -- rounds with an all-in
     showdown_rate  -- rounds reaching showdown / rounds with VPIP
     rounds         -- rounds observed (sample size)
@@ -33,12 +35,17 @@ class OpponentStats:
     allin_rate: float
     showdown_rate: float
     rounds: int
+    # After `rounds` with defaults so positional construction (bots/ml) keeps working.
+    call_to_raise: float = 0.35
+    raise_to_raise: float = 0.15
 
 
 # Population priors: used for unseen players and by bots with the opponent
 # model switched off. Roughly an average table of the scripted pool.
+# fold_to_raise + call_to_raise + raise_to_raise = 1.
 PRIOR = OpponentStats(vpip=0.35, pfr=0.2, aggression=1.5, fold_to_raise=0.5,
-                      allin_rate=0.1, showdown_rate=0.4, rounds=0)
+                      allin_rate=0.1, showdown_rate=0.4, rounds=0,
+                      call_to_raise=0.35, raise_to_raise=0.15)
 
 
 @dataclass(frozen=True)
@@ -49,6 +56,8 @@ class _RoundRecord:
     calls: int
     faced_raise: int
     folded_to_raise: int
+    called_raise: int
+    reraised: int
     allin: bool
     showdown: bool
 
@@ -63,7 +72,7 @@ class OpponentTracker:
 
     def update(self, log: RoundLog) -> None:
         per: dict[int, dict] = {
-            pid: dict(vpip=False, pfr=False, raises=0, calls=0, faced=0, ftr=0, allin=False)
+            pid: dict(vpip=False, pfr=False, raises=0, calls=0, faced=0, ftr=0, ctr=0, rtr=0, allin=False)
             for pid in log.positions
         }
         street = None
@@ -72,12 +81,13 @@ class OpponentTracker:
             if st != street:
                 street, raised_by = st, set()
             r = per.setdefault(pid, dict(vpip=False, pfr=False, raises=0, calls=0,
-                                         faced=0, ftr=0, allin=False))
+                                         faced=0, ftr=0, ctr=0, rtr=0, allin=False))
             facing = bool(raised_by - {pid})
             if facing:
                 r["faced"] += 1
-                if action == FOLD:
-                    r["ftr"] += 1
+                response = "ftr" if action == FOLD else "ctr" if action == CALL else "rtr" if action in AGGRESSIVE else None
+                if response:
+                    r[response] += 1
             if action in AGGRESSIVE:
                 r["raises"] += 1
                 raised_by.add(pid)
@@ -91,7 +101,7 @@ class OpponentTracker:
                     r["vpip"] = True
         for pid, r in per.items():
             rec = _RoundRecord(r["vpip"], r["pfr"], r["raises"], r["calls"], r["faced"],
-                               r["ftr"], r["allin"], pid in log.showdown_cards)
+                               r["ftr"], r["ctr"], r["rtr"], r["allin"], pid in log.showdown_cards)
             self._records.setdefault(pid, deque(maxlen=self.window)).append(rec)
 
     def stats(self, player_id: int) -> OpponentStats:
@@ -111,4 +121,6 @@ class OpponentTracker:
             allin_rate=sum(r.allin for r in recs) / n,
             showdown_rate=sum(r.showdown for r in recs) / vp if vp else 0.0,
             rounds=n,
+            call_to_raise=sum(r.called_raise for r in recs) / faced if faced else PRIOR.call_to_raise,
+            raise_to_raise=sum(r.reraised for r in recs) / faced if faced else PRIOR.raise_to_raise,
         )

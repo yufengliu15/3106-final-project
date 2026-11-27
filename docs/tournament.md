@@ -53,7 +53,7 @@ k = 1 because then a player who busts in about half their seats is eliminated.
   truncation both shrink the table total. This is by design.
 
 ## Seating
-- `seats` (default 8) per game. Every class in `main_bots` gets one seat; the
+- `seats` (default 10) per game. Every class in `main_bots` gets one seat; the
   rest are drawn at random, with replacement, from `simple_bots`, fresh each game.
 - Fresh player IDs (1000-9999, unique) each game, and a random initial seat
   order. Every bot gets `new_game()` at the start of a game, and
@@ -76,6 +76,21 @@ k = 1 because then a player who busts in about half their seats is eliminated.
   mean final stack, tie-break mean elimination rotation (a survivor counts as
   `rotations_played + 1`).
 
+### `LEADERBOARD.md`
+Every finished run (`python -m pokerbots.tournament` or the live viewer,
+`python -m pokerbots.web`) adds its overall leaderboard to the **top** of
+`LEADERBOARD.md` in the repo root, so the newest run is first. Each entry has:
+- a header with the number of games and the time: `## Overall: 10 game(s), 2026-11-26 00:31`;
+- one line with the settings (rotations, seats, stack, k, mode, seed) and the
+  match log path, if logging was on;
+- the table `# | Bot | Seats | Mean stack | Mean elim rot`. Seats = how many
+  seats the class held over all games. Stacks use the viewer's rounding (no
+  decimals from 100 bb up, else one).
+
+A run that crashes or is stopped with Ctrl+C before it finishes adds nothing.
+`--no-logs` turns off only the JSONL log, not the leaderboard entry. Written by
+`prepend_leaderboard()` in `src/pokerbots/tournament/__main__.py`.
+
 ## Logs
 One file per tournament run: `roundlogs/<date>_<time>.jsonl` in the repo root
 (e.g. `roundlogs/2026-11-09_15-04-12.jsonl`; logs are committed. The folder is
@@ -86,3 +101,6 @@ created on first run). JSONL = one JSON object per line. For each game, in order
 4. `{"type": "result", ...GameResult}` at the end
 
 JSON object keys are strings; convert player IDs back to `int` when loading.
+
+The file is line-buffered, so every finished round is on disk straight away
+and can be read (e.g. with `jq`) while the run is still going.

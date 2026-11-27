@@ -166,6 +166,24 @@ def test_jsonl_header_maps_ids_to_bots(tmp_path):
     assert {int(k): v for k, v in header["players"].items()} == {p.player_id: p.bot for p in results[0].standings}
 
 
+def test_observer_sees_deal_every_decision_and_same_results(tmp_path):
+    events: list[dict] = []
+    watched = Tournament(small_config(tmp_path / "a", games=1, rotations=2), observer=events.append).run()
+    assert watched == Tournament(small_config(tmp_path / "b", games=1, rotations=2)).run()
+    # the log file never gets the viewer-only records
+    assert (tmp_path / "a" / LOG).read_text() == (tmp_path / "b" / LOG).read_text()
+    rounds = [e for e in events if e["type"] == "round"]
+    starts = [e for e in events if e["type"] == "round_start"]
+    assert len(starts) == len(rounds) > 0
+    for start, log in zip(starts, rounds, strict=True):
+        assert set(start["hole_cards"]) == set(log["positions"])
+        for pid, cards in log["showdown_cards"].items():
+            assert tuple(start["hole_cards"][pid]) == tuple(cards)
+    decisions = [e for e in events if e["type"] == "action"]
+    assert len(decisions) == sum(len(r["actions"]) for r in rounds)
+    assert [e["type"] for e in events][-1] == "result"
+
+
 def test_rotation_average_counts_bust_as_minus_k_start():
     assert rotation_average(100, [0, 300], k=1) == 100
     assert rotation_average(100, [0, 0, 150], k=1) == math.trunc((-100 - 100 + 150) / 3)
